@@ -59,7 +59,7 @@ router.put('/',
         description: "Update information about the authenticated user's account.",
         tags: ['Account'],
 
-        responses: APIResponseSpec.describeWithWrongInputs(
+        responses: APIResponseSpec.describeBasic(
             APIResponseSpec.successNoData("Account information updated successfully"), 
             APIResponseSpec.badRequest("Your Auth Context is not a session / Syntax or validation error in request")
         )
@@ -88,7 +88,7 @@ router.put('/password',
         description: "Change the password of the authenticated user's account.",
         tags: ['Account'],
 
-        responses: APIResponseSpec.describeWithWrongInputs(
+        responses: APIResponseSpec.describeBasic(
             APIResponseSpec.successNoData("Password changed successfully"),
             APIResponseSpec.unauthorized("Current password is incorrect"),
             APIResponseSpec.badRequest("Your Auth Context is not a session / Syntax or validation error in request")

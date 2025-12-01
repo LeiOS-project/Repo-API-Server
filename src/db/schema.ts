@@ -11,7 +11,10 @@ export const users = sqliteTable('users', {
     id: int().primaryKey({ autoIncrement: true }),
     username: text().notNull().unique(),
     email: text().notNull().unique(),
-    password_hash: text().notNull()
+    password_hash: text().notNull(),
+    role: text({
+        enum: ['admin', 'user']
+    })
 });
 
 /**
@@ -32,5 +35,9 @@ export const sessions = sqliteTable('sessions', {
     expires_at: int().notNull()
 });
 
-
+export const apiKeys = sqliteTable('api_keys', {
+    key: text().primaryKey(),
+    user_id: int().notNull().references(() => users.id),
+    expires_at: int(),
+});
 

@@ -20,6 +20,7 @@
     },
     "dependencies": {
         "@hono/standard-validator": "^0.2.0",
+        "@libsql/client": "^0.15.15",
         "drizzle-orm": "^0.44.7",
         "drizzle-zod": "^0.8.3",
         "hono": "^4.10.7",

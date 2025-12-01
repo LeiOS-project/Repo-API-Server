@@ -14,7 +14,7 @@ export const users = sqliteTable('users', {
     password_hash: text().notNull(),
     role: text({
         enum: ['admin', 'user']
-    })
+    }).default('user').notNull()
 });
 
 /**
@@ -32,6 +32,9 @@ export const passwordResets = sqliteTable('password_resets', {
 export const sessions = sqliteTable('sessions', {
     token: text().primaryKey(),
     user_id: int().notNull().references(() => users.id),
+    user_role: text({
+        enum: ['admin', 'user']
+    }).notNull().references(() => users.role),
     expires_at: int().notNull()
 });
 
@@ -42,6 +45,9 @@ export const apiKeys = sqliteTable('api_keys', {
     id: int().primaryKey({ autoIncrement: true }),
     token: text().notNull().unique(),
     user_id: int().notNull().references(() => users.id),
+    user_role: text({
+        enum: ['admin', 'user']
+    }).notNull().references(() => users.role),
     expires_at: int(),
 });
 

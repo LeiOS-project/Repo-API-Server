@@ -61,7 +61,7 @@ router.put('/',
 
         responses: APIResponseSpec.describeWithWrongInputs(
             APIResponseSpec.successNoData("Account information updated successfully"), 
-            APIResponseSpec.badRequest("Your Auth Context is not a session")
+            APIResponseSpec.badRequest("Your Auth Context is not a session / Syntax or validation error in request")
         )
     }),
 
@@ -91,7 +91,7 @@ router.put('/password',
         responses: APIResponseSpec.describeWithWrongInputs(
             APIResponseSpec.successNoData("Password changed successfully"),
             APIResponseSpec.unauthorized("Current password is incorrect"),
-            APIResponseSpec.badRequest("Your Auth Context is not a session")
+            APIResponseSpec.badRequest("Your Auth Context is not a session / Syntax or validation error in request")
         )
     }),
 
@@ -165,7 +165,7 @@ router.delete('/',
         description: "Permanently delete the authenticated user's account.",
         tags: ['Account'],
 
-        responses: APIResponseSpec.describeWithWrongInputs(
+        responses: APIResponseSpec.describeBasic(
             APIResponseSpec.successNoData("Account deleted successfully"),
             APIResponseSpec.badRequest("Your Auth Context is not a session")
         )
@@ -185,7 +185,7 @@ router.delete('/',
             eq(DB.Schema.passwordResets.user_id, authContext.user_id)
         ).run();
 
-        
+
 
         // finally, delete the user account
         DB.instance().delete(DB.Schema.users).where(

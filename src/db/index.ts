@@ -24,7 +24,7 @@ export class DB {
 
         await this.db.insert(DB.Schema.users).values({
             username,
-            email: "admin@nowip.local",
+            email: "admin@leios.local",
             password_hash: await Bun.password.hash(randomPassword)
         });
 

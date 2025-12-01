@@ -16,7 +16,7 @@ export class API {
 	];
 
 	static async init(
-		frontendUrl: string = "http://localhost:3000"
+		frontendUrls: string[] = []
 	) {
 
 		this.app = new Hono();
@@ -24,7 +24,7 @@ export class API {
 		this.app.use(prettyJSON())
 
 		this.app.use('*', cors({
-			origin: frontendUrl,
+			origin: frontendUrls,
 			allowHeaders: ['Content-Type', 'Authorization'],
 			allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 			maxAge: 600,
@@ -61,9 +61,13 @@ export class API {
 			this.app.route("/", (await router).router);
 		}
 
-		this.app.get("/", (c) => {
-			return c.json({ status: "NowIP API is running" });
+		this.app.get("/health", (c) => {
+			return c.json({ status: "LeiOS Repo API is running" });
 		});
+
+        this.app.get("/", (c) => {
+            return c.redirect("/docs");
+        });
 
 		setupDocs(this.app);
 

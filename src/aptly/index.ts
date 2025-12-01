@@ -1,22 +1,24 @@
-import { Client, createClient } from "./api-client/client";
+import { client } from './api-client/client.gen';
+import * as apiClient from "./api-client"
 
 export class AptlyAPI {
 
-    protected static apiClient: Client;
+    private static isInitialized: boolean = false;
 
     static async init(apiUrl: string) {
 
-        this.apiClient = createClient({
+        client.setConfig({
             baseUrl: apiUrl
         });
 
+        this.isInitialized = true;
     }
 
-    static get client(): Client {
-        if (!this.apiClient) {
-            throw new Error("AptlyAPI not initialized. Call AptlyAPI.init(apiUrl) first.");
+    static getClient() {
+        if (!this.isInitialized) {
+            throw new Error("AptlyAPI not initialized. Call AptlyAPI.init(apiUrl) before accessing the client.");
         }
-        return this.apiClient;
+        return apiClient;
     }
 
 }

@@ -135,6 +135,19 @@ export class AptlyAPI {
                 Logger.info("Repository 'leios-testing' created.");
             }
 
+            // the archive repo is not published by default, its just to hold every package version in history
+            if (!existingRepos.some(repo => repo.Name === "leios-archive")) {
+                await this.getClient().postApiRepos({
+                    body: {
+                        Name: "leios-archive",
+                        DefaultComponent: "main",
+                        DefaultDistribution: "archive"
+                    }
+                });
+
+                Logger.info("Repository 'leios-archive' created.");
+            }
+
         } catch (error) {
             Logger.error("Failed to create default repositories: ", error);
             throw new Error("Failed to create default repositories: " + error);

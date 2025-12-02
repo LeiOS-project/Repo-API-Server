@@ -3,6 +3,8 @@ import * as apiClient from "./api-client"
 import { Logger } from '../utils/logger';
 import { Utils } from '../utils';
 import { AptlyUtils } from './utils';
+import fs from 'fs';
+import { dirname } from 'path';
 
 export interface AptlyAPISettings {
     aptlyRoot: string;
@@ -15,11 +17,12 @@ export class AptlyAPI {
 
     public static aptlyProcess: Bun.Subprocess<"ignore", "pipe", "pipe">;
 
-    protected static aptlyRoot: string;
-    protected static aptlyDataDir: string;
-    protected static aptlyBinaryPath: string;
-    protected static aptlyConfigPath: string;
-    protected static aptlyPort: number;
+    public static aptlyRoot: string;
+    public static aptlyDataDir: string;
+    public static aptlyUploadDir: string;
+    public static aptlyBinaryPath: string;
+    public static aptlyConfigPath: string;
+    public static aptlyPort: number;
 
     static async init(settings: AptlyAPISettings) {
         if (this.isInitialized) return;
@@ -27,6 +30,7 @@ export class AptlyAPI {
 
         this.aptlyRoot = settings.aptlyRoot;
         this.aptlyDataDir = settings.aptlyRoot + "/data";
+        this.aptlyUploadDir = settings.aptlyRoot + "/upload";
         this.aptlyBinaryPath = settings.aptlyRoot + "/bin/aptly";
         this.aptlyConfigPath = settings.aptlyRoot + "/.config/aptly.conf";
         this.aptlyPort = settings.aptlyPort;
@@ -162,12 +166,90 @@ export class AptlyAPI {
         return apiClient;
     }
 
-    
+
     static async stop(type: NodeJS.Signals) {
         if (this.aptlyProcess) {
             this.aptlyProcess.kill(type);
             Logger.info("Aptly process stopped.");
         }
+    }
+
+}
+
+export namespace RepoUtils {
+
+    export const DEFAULT_REPOS = ["leios-stable", "leios-testing", "leios-archive"] as const;
+
+    export async function getPackageRefInRepo(packageName: string, repoName: string) {
+        return (await AptlyAPI.getClient().getApiReposByNamePackages({
+            path: {
+                name: repoName
+            },
+            query: {
+                q: `Name (${packageName})`,
+                withDeps: "",
+                format: "",
+                maximumVersion: ""
+            }
+        })).data as any as string[] || [];
+    }
+
+    export async function uploadAndVerifyPackage(
+        packageData: { name: string; version: string; architecture: string; },
+        file: File, repoName: string
+    ) {
+        const fullPackageVersion = AptlyUtils.buildVersionWithLeiOSSuffix(packageData.version);
+        const uploadSubDir = Bun.randomUUIDv7();
+        const fileName = `${packageData.name}_${fullPackageVersion}_${packageData.architecture}.deb`;
+        const fullFilePath = AptlyAPI.aptlyUploadDir + "/" + uploadSubDir + "/" + fileName;
+        await Bun.write(fullFilePath, await file.arrayBuffer());
+
+        const dpkgChackResult = await Bun.$`dpkg --info ${fullFilePath}`.text();
+
+        if (!dpkgChackResult.includes(`Version: ${fullPackageVersion}`) ||
+            !dpkgChackResult.includes(`Architecture: ${packageData.architecture}`) ||
+            !dpkgChackResult.includes(`Package: ${packageData.name}`)) {
+            throw new Error("Uploaded package verification failed.");
+        }
+
+        const addingResult = await AptlyAPI.getClient().postApiReposByNameFileByDirByFile({
+            path: {
+                name: repoName,
+                dir: uploadSubDir,
+                file: fileName
+            }
+        });
+
+        const addedFiles = (addingResult.data as any as { "Report": { "Added": string[] } })["Report"]["Added"];
+
+        if (addingResult.error || !addedFiles[0].includes("added")) {
+
+            fs.unlinkSync(dirname(fullFilePath));
+
+            throw new Error("Failed to add package to repository: " + addingResult.error);
+        }
+
+        return true;
+    }
+
+    export async function deletePackageInRepo(packageName: string, repoName: string) {
+        const refs = await getPackageRefInRepo(packageName, repoName);
+        const result = await AptlyAPI.getClient().deleteApiReposByNamePackages({
+            body: {
+                PackageRefs: refs
+            },
+            path: {
+                name: repoName
+            }
+        });
+        return (result.data && !result.error) ? true : false;
+    }
+
+    export async function deletePackageInAllRepos(packageName: string) {
+        for (const repo of DEFAULT_REPOS) {
+            await deletePackageInRepo(packageName, repo);
+        }
+        return true;
     }
 
 }

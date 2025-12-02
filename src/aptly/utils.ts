@@ -95,4 +95,19 @@ export class AptlyUtils {
         pump();
     }
 
+    static extractVersionFromLeiOSSuffix(version: string) {
+        const leiOSSuffixIndex = version.indexOf("leios1");
+        if (leiOSSuffixIndex === -1) {
+            return version;
+        }
+        return version.substring(0, leiOSSuffixIndex);
+    }
+
+    static buildVersionWithLeiOSSuffix(version: string) {
+        if (version.endsWith("leios1")) {
+            return version;
+        }
+        return version + "leios1";
+    }
+
 }

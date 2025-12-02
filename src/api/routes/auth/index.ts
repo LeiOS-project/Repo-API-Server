@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { Model } from './model'
+import { AuthModel } from './model'
 import { validator as zValidator } from "hono-openapi";
 import { DB } from "../../../db";
 import { eq } from "drizzle-orm";
@@ -17,13 +17,13 @@ router.post('/login',
         tags: ["Authentication"],
 
         responses: APIResponseSpec.describeWithWrongInputs(
-            APIResponseSpec.success("Login successful", Model.Login.Response),
+            APIResponseSpec.success("Login successful", AuthModel.Login.Response),
             APIResponseSpec.unauthorized("Unauthorized: Invalid username or password"),
         ),
 
     }),
 
-    zValidator("json", Model.Login.Body),
+    zValidator("json", AuthModel.Login.Body),
     
     async (c) => {
         const { username, password } = c.req.valid("json");
@@ -52,7 +52,7 @@ router.get('/session',
         tags: ["Authentication"],
 
         responses: APIResponseSpec.describeBasic(
-            APIResponseSpec.success("Session info retrieved successfully", Model.Session.Response),
+            APIResponseSpec.success("Session info retrieved successfully", AuthModel.Session.Response),
             APIResponseSpec.unauthorized("Unauthorized: Invalid or missing session token"),
             APIResponseSpec.badRequest("Your Auth Context is not a session")
         )

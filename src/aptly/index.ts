@@ -132,6 +132,7 @@ export class AptlyAPI {
             const config = {
                 "rootDir": this.aptlyDataDir,
                 "logLevel": Logger.getLogLevel(),
+                // "EnableSwaggerEndpoint": true,
                 "S3PublishEndpoints": null,
                 "FileSystemPublishEndpoints": null,
                 "SwiftPublishEndpoints": null,

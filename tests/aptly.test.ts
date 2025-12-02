@@ -20,4 +20,24 @@ describe("Aptly Package Deletion", () => {
         expect(packageRefs).toBeInstanceOf(Array);
     });
 
+    test("Upload and Verify Package", async () => {
+
+        const filePath = "./testdata/fastfetch_2.55.1leios1_amd64.deb";
+        const fileData = new File([await Bun.file(filePath).arrayBuffer()], "fastfetch_2.55.1leios1_amd64.deb");
+
+        const packageData = {
+            name: "fastfetch",
+            maintainerName: "Carter Li",
+            maintainerEmail: "zhangsongcui@live.cn",
+            version: "2.55.1",
+            architecture: "amd64"
+        };
+
+        const repoName = "leios-testing";
+
+        const uploadResult = await RepoUtils.uploadAndVerifyPackage(packageData, fileData, repoName);
+        expect(uploadResult).toBe(true);
+
+    });
+
 });

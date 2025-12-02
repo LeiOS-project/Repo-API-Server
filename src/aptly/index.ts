@@ -30,7 +30,7 @@ export class AptlyAPI {
 
         this.aptlyRoot = settings.aptlyRoot;
         this.aptlyDataDir = settings.aptlyRoot + "/data";
-        this.aptlyUploadDir = settings.aptlyRoot + "/upload";
+        this.aptlyUploadDir = this.aptlyDataDir + "/upload";
         this.aptlyBinaryPath = settings.aptlyRoot + "/bin/aptly";
         this.aptlyConfigPath = settings.aptlyRoot + "/.config/aptly.conf";
         this.aptlyPort = settings.aptlyPort;
@@ -195,8 +195,16 @@ export namespace RepoUtils {
     }
 
     export async function uploadAndVerifyPackage(
-        packageData: { name: string; version: string; architecture: string; },
-        file: File, repoName: string
+        packageData: {
+            name: string;
+            maintainerName: string;
+            maintainerEmail: string;
+            version: string;
+            architecture: string;
+        },
+        file: File,
+        repoName: string,
+        skipMaintainerCheck = false
     ) {
         const fullPackageVersion = AptlyUtils.buildVersionWithLeiOSSuffix(packageData.version);
         const uploadSubDir = Bun.randomUUIDv7();
@@ -206,10 +214,24 @@ export namespace RepoUtils {
 
         const dpkgChackResult = await Bun.$`dpkg --info ${fullFilePath}`.text();
 
-        if (!dpkgChackResult.includes(`Version: ${fullPackageVersion}`) ||
-            !dpkgChackResult.includes(`Architecture: ${packageData.architecture}`) ||
-            !dpkgChackResult.includes(`Package: ${packageData.name}`)) {
-            throw new Error("Uploaded package verification failed.");
+        if (!dpkgChackResult.includes(`Version: ${fullPackageVersion}`)) {
+            fs.rmSync(dirname(fullFilePath), { recursive: true, force: true });
+            throw new Error("Uploaded package version mismatch.");
+        }
+
+        if (!dpkgChackResult.includes(`Architecture: ${packageData.architecture}`)) {
+            fs.rmSync(dirname(fullFilePath), { recursive: true, force: true });
+            throw new Error("Uploaded package architecture mismatch.");
+        }
+
+        if (!dpkgChackResult.includes(`Package: ${packageData.name}`)) {
+            fs.rmSync(dirname(fullFilePath), { recursive: true, force: true });
+            throw new Error("Uploaded package name mismatch.");
+        }
+
+        if (!skipMaintainerCheck && !dpkgChackResult.includes(`Maintainer: ${packageData.maintainerName} <${packageData.maintainerEmail}>`)) {
+            fs.rmSync(dirname(fullFilePath), { recursive: true, force: true });
+            throw new Error("Uploaded package maintainer mismatch.");
         }
 
         const addingResult = await AptlyAPI.getClient().postApiReposByNameFileByDirByFile({
@@ -224,7 +246,7 @@ export namespace RepoUtils {
 
         if (addingResult.error || !addedFiles[0].includes("added")) {
 
-            fs.unlinkSync(dirname(fullFilePath));
+            fs.rmSync(dirname(fullFilePath), { recursive: true, force: true });
 
             throw new Error("Failed to add package to repository: " + addingResult.error);
         }

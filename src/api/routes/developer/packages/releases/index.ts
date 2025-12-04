@@ -65,7 +65,7 @@ router.post('/:version/:arch',
         const { version, arch } = c.req.valid("param");
 
         const owner = DB.instance().select().from(DB.Schema.users).where(
-            eq(DB.Schema.users.id, packageData.owner_user_id)
+            eq(DB.Schema.users.id, authContext.user_id)
         ).get();
         if (!owner) {
             return APIResponse.serverError(c, "Package owner not found");
@@ -83,8 +83,8 @@ router.post('/:version/:arch',
                     name: packageData.name,
                     version,
                     architecture: arch,
-                    maintainerName: owner.display_name,
-                    maintainerEmail: owner.email,
+                    maintainer_name: owner.display_name,
+                    maintainer_email: owner.email,
                 },
                 file
             );

@@ -23,8 +23,8 @@ describe("Aptly Package Tests", () => {
 
         const packageData = {
             name: "fastfetch",
-            maintainerName: "Carter Li",
-            maintainerEmail: "zhangsongcui@live.cn",
+            maintainer_name: "Carter Li",
+            maintainer_email: "zhangsongcui@live.cn",
             version: "2.55.0",
             architecture: "amd64"
         } as const;
@@ -57,7 +57,7 @@ describe("Aptly Package Tests", () => {
         expect(result).toBeDefined();
         expect(result.name).toBe("fastfetch");
         expect(result.version).toBe("2.55.0");
-        expect(result.leiosPatch).toBeUndefined();
+        expect(result.leios_patch).toBeUndefined();
         expect(result.architecture).toBe("amd64");
         expect(result.maintainer).toBe("Carter Li <zhangsongcui@live.cn>");
     });

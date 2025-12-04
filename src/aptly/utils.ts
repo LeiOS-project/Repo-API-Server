@@ -101,43 +101,43 @@ export class AptlyUtils {
         if (leiosSuffixMatch) {
             return {
                 version: leiosSuffixMatch[1],
-                leiosPatch: parseInt(leiosSuffixMatch[2])
+                leios_patch: parseInt(leiosSuffixMatch[2])
             };
         } else {
             return {
                 version: fullVersion,
-                leiosPatch: undefined
+                leios_patch: undefined
             };
         }
     }
 
 
 
-    static buildVersionWithLeiOSSuffix(version: string, leiosPatch?: number) {
-        if (leiosPatch) {
-            if (version.endsWith(`leios${leiosPatch}`)) {
+    static buildVersionWithLeiOSSuffix(version: string, leios_patch?: number) {
+        if (leios_patch) {
+            if (version.endsWith(`leios${leios_patch}`)) {
                 return version;
             }
-            return version + `leios${leiosPatch}`;
+            return version + `leios${leios_patch}`;
         }
         return version;
     }
 
     static getPackageIdentifier(packageName: string, fullPackageVersion: string, architecture: string): string;
-    static getPackageIdentifier(packageName: string, packageVersion: string, leiosPatch: number | undefined, architecture: string): string;
-    static getPackageIdentifier(packageName: string, versionOrFullVersion: string, leiosPatchOrArch: number | string | undefined, architectureOpt?: string) {
+    static getPackageIdentifier(packageName: string, packageVersion: string, leios_patch: number | undefined, architecture: string): string;
+    static getPackageIdentifier(packageName: string, versionOrFullVersion: string, leios_patchOrArch: number | string | undefined, architectureOpt?: string) {
 
         let fullPackageVersion: string;
 
-        if (typeof leiosPatchOrArch === "number" || leiosPatchOrArch === undefined) {
-            // Called with (packageName, packageVersion, leiosPatch, architecture)
-            fullPackageVersion = this.buildVersionWithLeiOSSuffix(versionOrFullVersion, leiosPatchOrArch as number | undefined);
+        if (typeof leios_patchOrArch === "number" || leios_patchOrArch === undefined) {
+            // Called with (packageName, packageVersion, leios_patch, architecture)
+            fullPackageVersion = this.buildVersionWithLeiOSSuffix(versionOrFullVersion, leios_patchOrArch as number | undefined);
         } else {
             // Called with (packageName, fullPackageVersion, architecture)
             fullPackageVersion = versionOrFullVersion;
         }
 
-        const architecture = typeof leiosPatchOrArch === "string" ? leiosPatchOrArch : architectureOpt!;
+        const architecture = typeof leios_patchOrArch === "string" ? leios_patchOrArch : architectureOpt!;
 
         return `${packageName}_${fullPackageVersion}_${architecture}`;
     }

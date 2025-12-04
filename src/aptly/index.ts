@@ -3,15 +3,13 @@ import * as apiClient from "./api-client"
 import { Logger } from '../utils/logger';
 import { Utils } from '../utils';
 import { AptlyUtils } from './utils';
-import fs from 'fs';
-import { dirname } from 'path';
 
 export interface AptlyAPISettings {
     aptlyRoot: string;
     aptlyPort: number;
 }
 
-export class AptlyAPI {
+export class AptlyAPIServer {
 
     private static isInitialized: boolean = false;
 
@@ -172,106 +170,6 @@ export class AptlyAPI {
             this.aptlyProcess.kill(type);
             Logger.info("Aptly process stopped.");
         }
-    }
-
-}
-
-export namespace RepoUtils {
-
-    export const DEFAULT_REPOS = ["leios-stable", "leios-testing", "leios-archive"] as const;
-
-    export async function getPackageRefInRepo(packageName: string, repoName: string) {
-        return (await AptlyAPI.getClient().getApiReposByNamePackages({
-            path: {
-                name: repoName
-            },
-            query: {
-                q: `Name (${packageName})`,
-                withDeps: "",
-                format: "",
-                maximumVersion: ""
-            }
-        })).data as any as string[] || [];
-    }
-
-    export async function uploadAndVerifyPackage(
-        packageData: {
-            name: string;
-            maintainerName: string;
-            maintainerEmail: string;
-            version: string;
-            architecture: string;
-        },
-        file: File,
-        repoName: string,
-        skipMaintainerCheck = false
-    ) {
-        const fullPackageVersion = AptlyUtils.buildVersionWithLeiOSSuffix(packageData.version);
-        const uploadSubDir = Bun.randomUUIDv7();
-        const fileName = `${packageData.name}_${fullPackageVersion}_${packageData.architecture}.deb`;
-        const fullFilePath = AptlyAPI.aptlyUploadDir + "/" + uploadSubDir + "/" + fileName;
-        await Bun.write(fullFilePath, await file.arrayBuffer());
-
-        const dpkgChackResult = await Bun.$`dpkg --info ${fullFilePath}`.text();
-
-        if (!dpkgChackResult.includes(`Version: ${fullPackageVersion}`)) {
-            fs.rmSync(dirname(fullFilePath), { recursive: true, force: true });
-            throw new Error("Uploaded package version mismatch.");
-        }
-
-        if (!dpkgChackResult.includes(`Architecture: ${packageData.architecture}`)) {
-            fs.rmSync(dirname(fullFilePath), { recursive: true, force: true });
-            throw new Error("Uploaded package architecture mismatch.");
-        }
-
-        if (!dpkgChackResult.includes(`Package: ${packageData.name}`)) {
-            fs.rmSync(dirname(fullFilePath), { recursive: true, force: true });
-            throw new Error("Uploaded package name mismatch.");
-        }
-
-        if (!skipMaintainerCheck && !dpkgChackResult.includes(`Maintainer: ${packageData.maintainerName} <${packageData.maintainerEmail}>`)) {
-            fs.rmSync(dirname(fullFilePath), { recursive: true, force: true });
-            throw new Error("Uploaded package maintainer mismatch.");
-        }
-
-        const addingResult = await AptlyAPI.getClient().postApiReposByNameFileByDirByFile({
-            path: {
-                name: repoName,
-                dir: uploadSubDir,
-                file: fileName
-            }
-        });
-
-        const addedFiles = (addingResult.data as any as { "Report": { "Added": string[] } })["Report"]["Added"];
-
-        if (addingResult.error || !addedFiles[0].includes("added")) {
-
-            fs.rmSync(dirname(fullFilePath), { recursive: true, force: true });
-
-            throw new Error("Failed to add package to repository: " + addingResult.error);
-        }
-
-        return true;
-    }
-
-    export async function deletePackageInRepo(packageName: string, repoName: string) {
-        const refs = await getPackageRefInRepo(packageName, repoName);
-        const result = await AptlyAPI.getClient().deleteApiReposByNamePackages({
-            body: {
-                PackageRefs: refs
-            },
-            path: {
-                name: repoName
-            }
-        });
-        return (result.data && !result.error) ? true : false;
-    }
-
-    export async function deletePackageInAllRepos(packageName: string) {
-        for (const repo of DEFAULT_REPOS) {
-            await deletePackageInRepo(packageName, repo);
-        }
-        return true;
     }
 
 }

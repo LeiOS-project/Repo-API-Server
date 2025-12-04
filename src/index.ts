@@ -1,5 +1,5 @@
 import { API } from "./api";
-import { AptlyAPI } from "./aptly";
+import { AptlyAPIServer } from "./aptly";
 import { DB } from "./db";
 import { ConfigHandler } from "./utils/config";
 import { Logger } from "./utils/logger";
@@ -16,14 +16,14 @@ export class Main {
             config.LRA_DB_PATH ?? "./data/db.sqlite"
         );
 
-        await AptlyAPI.init({
+        await AptlyAPIServer.init({
             aptlyRoot: config.LRA_APTLY_ROOT ?? "./data/aptly",
             aptlyPort: parseInt(config.LRA_APTLY_PORT ?? "12150"),
         });
 
         await API.init();
 
-        await AptlyAPI.start();
+        await AptlyAPIServer.start();
 
         await API.start(
             parseInt(config.LRA_API_PORT ?? "12151"),
@@ -38,7 +38,7 @@ export class Main {
     private static onKill(type: NodeJS.Signals) {
         Logger.log(`Received ${type}, shutting down...`);
         API.stop();
-        AptlyAPI.stop(type);
+        AptlyAPIServer.stop(type);
         process.exit();
     }
 

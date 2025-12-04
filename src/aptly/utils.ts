@@ -95,19 +95,22 @@ export class AptlyUtils {
         pump();
     }
 
-    static extractVersionFromLeiOSSuffix(version: string) {
-        const leiOSSuffixIndex = version.indexOf("leios1");
+    static extractVersionFromLeiOSSuffix(fullVersion: string) {
+        const leiOSSuffixIndex = fullVersion.indexOf("leios");
         if (leiOSSuffixIndex === -1) {
-            return version;
+            return fullVersion;
         }
-        return version.substring(0, leiOSSuffixIndex);
+        return fullVersion.substring(0, leiOSSuffixIndex);
     }
 
-    static buildVersionWithLeiOSSuffix(version: string) {
-        if (version.endsWith("leios1")) {
-            return version;
+    static buildVersionWithLeiOSSuffix(version: string, leiosPatchVersion?: number) {
+        if (leiosPatchVersion) {
+            if (version.endsWith(`leios${leiosPatchVersion}`)) {
+                return version;
+            }
+            return version + `leios${leiosPatchVersion}`;
         }
-        return version + "leios1";
+        return version;
     }
 
 }

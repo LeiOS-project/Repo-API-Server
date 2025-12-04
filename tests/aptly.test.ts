@@ -29,19 +29,22 @@ describe("Aptly Package Tests", () => {
             architecture: "amd64"
         };
 
-        const uploadResult = await AptlyAPI.uploadAndVerifyPackage("leios-testing", packageData, fileData);
+        const uploadResult = await AptlyAPI.Packages.uploadAndVerify("leios-testing", packageData, fileData);
         expect(uploadResult).toBe(true);
 
     });
 
     test("Get Package References", async () => {
-        const packageRefs = await AptlyAPI.getPackageRefInRepo("leios-testing", "fastfetch");
+        const packageRefs = await AptlyAPI.Packages.getRefInRepo("leios-testing", "fastfetch");
         expect(packageRefs[0]).toInclude("fastfetch");
     });
 
     test("Remove Package from Repo", async () => {
-        const removeResult = await AptlyAPI.deletePackageInRepo("leios-testing", "fastfetch");
+        const removeResult = await AptlyAPI.Packages.deleteInRepo("leios-testing", "fastfetch");
         expect(removeResult).toBe(true);
+
+        const packageRefsAfterRemoval = await AptlyAPI.Packages.getRefInRepo("leios-testing", "fastfetch");
+        expect(packageRefsAfterRemoval.length).toBe(0);
     });
 
 });

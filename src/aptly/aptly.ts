@@ -3,12 +3,16 @@ import fs from 'fs';
 import { dirname } from 'path';
 import { AptlyUtils } from "./utils";
 
-export namespace AptlyAPI {
+export namespace AptlyAPI.Utils {
 
     export const DEFAULT_REPOS = ["leios-stable", "leios-testing", "leios-archive"] as const;
     export type DefaultRepos = (typeof DEFAULT_REPOS)[number];
 
-    export async function getPackageRefInRepo(repoName: DefaultRepos, packageName: string, packageVersion?: string, packageArch?: string) {
+}
+
+export namespace AptlyAPI.Packages {
+
+    export async function getRefInRepo(repoName: AptlyAPI.Utils.DefaultRepos, packageName: string, packageVersion?: string, packageArch?: string) {
         return (await AptlyAPIServer.getClient().getApiReposByNamePackages({
             path: {
                 name: repoName
@@ -22,13 +26,13 @@ export namespace AptlyAPI {
         })).data as any as string[] || [];
     }
 
-    export async function existsPackageInRepo(repoName: DefaultRepos, packageName: string, packageVersion?: string, packageArch?: string) {
-        const refs = await getPackageRefInRepo(repoName, packageName, packageVersion, packageArch);
+    export async function existsInRepo(repoName: AptlyAPI.Utils.DefaultRepos, packageName: string, packageVersion?: string, packageArch?: string) {
+        const refs = await getRefInRepo(repoName, packageName, packageVersion, packageArch);
         return refs.length > 0;
     }
 
-    export async function uploadAndVerifyPackage(
-        repoName: DefaultRepos,
+    export async function uploadAndVerify(
+        repoName: AptlyAPI.Utils.DefaultRepos,
         packageData: {
             name: string;
             maintainerName: string;
@@ -42,7 +46,7 @@ export namespace AptlyAPI {
     ) {
         const fullPackageVersion = AptlyUtils.buildVersionWithLeiOSSuffix(packageData.version, packageData.leiosPatchVersion);
 
-        const existsPackage = await existsPackageInRepo(repoName, packageData.name, fullPackageVersion, packageData.architecture);
+        const existsPackage = await existsInRepo(repoName, packageData.name, fullPackageVersion, packageData.architecture);
         if (existsPackage) {
             throw new Error("Package already exists in repository.");
         }
@@ -96,8 +100,8 @@ export namespace AptlyAPI {
         return true;
     }
 
-    export async function deletePackageInRepo(repoName: DefaultRepos, packageName: string, packageVersion?: string, packageArch?: string) {
-        const refs = await getPackageRefInRepo(repoName, packageName, packageVersion, packageArch);
+    export async function deleteInRepo(repoName: AptlyAPI.Utils.DefaultRepos, packageName: string, packageVersion?: string, packageArch?: string, doCleanup = true) {
+        const refs = await getRefInRepo(repoName, packageName, packageVersion, packageArch);
         const result = await AptlyAPIServer.getClient().deleteApiReposByNamePackages({
             body: {
                 PackageRefs: refs
@@ -109,10 +113,10 @@ export namespace AptlyAPI {
         return (result.data && !result.error) ? true : false;
     }
 
-    export async function deleteAllPackageInAllRepos(packageName: string) {
+    export async function deleteAllInAllRepos(packageName: string) {
         let result = true;
-        for (const repo of DEFAULT_REPOS) {
-            result = await deletePackageInRepo(repo, packageName) && result;
+        for (const repo of AptlyAPI.Utils.DEFAULT_REPOS) {
+            result = await deleteInRepo(repo, packageName) && result;
         }
         return result;
     }

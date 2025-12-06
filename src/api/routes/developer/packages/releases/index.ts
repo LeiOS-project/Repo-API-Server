@@ -93,6 +93,12 @@ router.post('/:version/:arch',
                 return APIResponse.serverError(c, "Failed to upload and verify package release");
             }
 
+            // cleanup everything in testing repo first
+            const cleanupResult = await AptlyAPI.Packages.deleteInRepo("leios-testing", packageData.name);
+            if (!cleanupResult) {
+                return APIResponse.serverError(c, "Failed to clean up existing package releases in testing repository");
+            }
+
             const copyResult = await AptlyAPI.Packages.copyIntoRepo("leios-testing", packageData.name, version, undefined, arch);
             if (!copyResult) {
                 return APIResponse.serverError(c, "Failed to copy package release into testing repository");

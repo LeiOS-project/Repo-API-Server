@@ -64,3 +64,15 @@ export const packages = sqliteTable('packages', {
     description: text().notNull(),
     homepage_url: text().notNull(),
 });
+
+export const stableInclusionRequests = sqliteTable('stable_inclusion_requests', {
+    id: int().primaryKey({ autoIncrement: true }),
+    package_name: text().notNull().references(() => packages.name),
+    version: text().notNull(),
+    leios_patch: int(),
+    architecture: text({ enum: ['amd64', 'arm64'] }).notNull(),
+    requested_by: int().notNull().references(() => users.id),
+    status: text({ enum: ['pending', 'approved', 'denied'] }).default('pending').notNull(),
+    reviewed_by: int().references(() => users.id),
+    decision_reason: text(),
+});

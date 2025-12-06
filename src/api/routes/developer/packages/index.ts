@@ -8,6 +8,7 @@ import { APIResponseSpec, APIRouteSpec } from "../../../utils/specHelpers";
 import { AuthHandler } from "../../../utils/authHandler";
 import z from "zod";
 import { AptlyAPI } from "../../../../aptly/api";
+import { StableRequestModel } from "../../shared/stableRequests";
 import { router as releasesRouter } from "./releases/index";
 
 export const router = new Hono().basePath('/packages');
@@ -149,6 +150,113 @@ router.put('/:packageName',
         );
 
         return APIResponse.successNoData(c, "Package updated successfully");
+    }
+);
+
+
+router.get('/:packageName/stable-requests',
+
+    APIRouteSpec.authenticated({
+        summary: "List stable inclusion requests",
+        description: "View stable inclusion requests for the selected package.",
+        tags: ['Developer API / Packages / Stable Requests'],
+
+        responses: APIResponseSpec.describeBasic(
+            APIResponseSpec.success("Stable inclusion requests retrieved successfully", StableRequestModel.List.Response),
+            APIResponseSpec.notFound("Package with specified name not found")
+        )
+    }),
+
+    zValidator("query", StableRequestModel.List.Query),
+
+    async (c) => {
+        // @ts-ignore
+        const packageData = c.get("package") as DB.Models.Package;
+        const filters = c.req.valid("query") as z.infer<typeof StableRequestModel.List.Query>;
+
+        let query = DB.instance().select().from(DB.Schema.stableInclusionRequests).where(
+            eq(DB.Schema.stableInclusionRequests.package_name, packageData.name)
+        ).$dynamic();
+
+        if (filters.status) {
+            query = query.where(eq(DB.Schema.stableInclusionRequests.status, filters.status));
+        }
+
+        const requests = await query;
+
+        return APIResponse.success(c, "Stable inclusion requests retrieved successfully", requests);
+    }
+);
+
+
+router.post('/:packageName/stable-requests',
+
+    APIRouteSpec.authenticated({
+        summary: "Request promotion to stable",
+        description: "Submit a request for an existing release to be copied into the stable repository.",
+        tags: ['Developer API / Packages / Stable Requests'],
+
+        responses: APIResponseSpec.describeWithWrongInputs(
+            APIResponseSpec.created("Stable inclusion request submitted", StableRequestModel.Create.Response),
+            APIResponseSpec.notFound("Release not found in archive repository"),
+            APIResponseSpec.conflict("A pending request already exists or the release is already stable")
+        )
+    }),
+
+    zValidator("json", StableRequestModel.Create.Body),
+
+    async (c) => {
+        // @ts-ignore
+        const packageData = c.get("package") as DB.Models.Package;
+        // @ts-ignore
+        const authContext = c.get("authContext") as AuthHandler.AuthContext;
+
+        const { version, arch, leios_patch } = c.req.valid("json") as StableRequestModel.Create.Body;
+
+        const existsInArchive = await AptlyAPI.Packages.existsInRepo(
+            "leios-archive",
+            packageData.name,
+            version,
+            leios_patch,
+            arch
+        );
+
+        if (!existsInArchive) {
+            return APIResponse.notFound(c, "Release not found in archive repository");
+        }
+
+        const alreadyStable = await AptlyAPI.Packages.existsInRepo(
+            "leios-stable",
+            packageData.name,
+            version,
+            leios_patch,
+            arch
+        );
+
+        if (alreadyStable) {
+            return APIResponse.conflict(c, "Release already available in stable repository");
+        }
+
+        const existingPending = DB.instance().select().from(DB.Schema.stableInclusionRequests).where(and(
+            eq(DB.Schema.stableInclusionRequests.package_name, packageData.name),
+            eq(DB.Schema.stableInclusionRequests.version, version),
+            eq(DB.Schema.stableInclusionRequests.architecture, arch),
+            eq(DB.Schema.stableInclusionRequests.status, 'pending')
+        )).get();
+
+        if (existingPending) {
+            return APIResponse.conflict(c, "A pending request already exists for this version and architecture");
+        }
+
+        const inserted = DB.instance().insert(DB.Schema.stableInclusionRequests).values({
+            package_name: packageData.name,
+            version,
+            leios_patch,
+            architecture: arch,
+            requested_by: authContext.user_id,
+        }).returning().get();
+
+        return APIResponse.created(c, "Stable inclusion request submitted", { id: inserted.id });
     }
 );
 

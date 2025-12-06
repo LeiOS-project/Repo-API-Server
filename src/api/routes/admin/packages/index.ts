@@ -1,0 +1,313 @@
+import { Hono } from "hono";
+import { validator as zValidator } from "hono-openapi";
+import z from "zod";
+import { and, eq } from "drizzle-orm";
+
+import { APIResponse } from "../../../utils/api-res";
+import { APIResponseSpec, APIRouteSpec } from "../../../utils/specHelpers";
+import { DB } from "../../../../db";
+import { StableRequestModel } from "../../shared/stableRequests";
+import { AdminPackageModel } from "./model";
+import { AptlyAPI } from "../../../../aptly/api";
+import { AuthHandler } from "../../../utils/authHandler";
+
+const ADMIN_PACKAGES_TAG = "Admin API / Packages";
+const ADMIN_STABLE_REQUESTS_TAG = "Admin API / Stable Requests";
+
+export const router = new Hono().basePath('/packages');
+
+router.get('/stable-requests',
+
+    APIRouteSpec.authenticated({
+        summary: "List stable inclusion requests",
+        description: "Retrieve stable inclusion requests with optional status filtering.",
+        tags: [ADMIN_STABLE_REQUESTS_TAG],
+        responses: APIResponseSpec.describeBasic(
+            APIResponseSpec.success("Stable inclusion requests retrieved successfully", StableRequestModel.List.Response)
+        )
+    }),
+
+    zValidator("query", StableRequestModel.List.Query),
+
+    async (c) => {
+        const filters = c.req.valid("query") as z.infer<typeof StableRequestModel.List.Query>;
+
+        let query = DB.instance().select().from(DB.Schema.stableInclusionRequests).$dynamic();
+        if (filters.status) {
+            query = query.where(eq(DB.Schema.stableInclusionRequests.status, filters.status));
+        }
+
+        const requests = await query;
+        return APIResponse.success(c, "Stable inclusion requests retrieved successfully", requests);
+    }
+);
+
+router.post('/stable-requests/:requestId/decision',
+
+    APIRouteSpec.authenticated({
+        summary: "Decide on stable inclusion request",
+        description: "Approve or deny a developer's request to promote a package version into the stable repository.",
+        tags: [ADMIN_STABLE_REQUESTS_TAG],
+        responses: APIResponseSpec.describeWithWrongInputs(
+            APIResponseSpec.success("Stable inclusion request updated", StableRequestModel.Entity),
+            APIResponseSpec.notFound("Stable inclusion request not found"),
+            APIResponseSpec.conflict("Stable inclusion request already resolved"),
+            APIResponseSpec.serverError("Failed to copy package into stable repository")
+        )
+    }),
+
+    zValidator("param", AdminPackageModel.StableRequestIdParams),
+    zValidator("json", StableRequestModel.Decision.Body),
+
+    async (c) => {
+        // @ts-ignore
+        const authContext = c.get("authContext") as AuthHandler.AuthContext;
+        // @ts-ignore
+        const { requestId } = c.req.valid("param") as z.infer<typeof AdminPackageModel.StableRequestIdParams>;
+        const decisionBody = c.req.valid("json") as StableRequestModel.Decision.Body;
+
+        const request = DB.instance().select().from(DB.Schema.stableInclusionRequests).where(
+            eq(DB.Schema.stableInclusionRequests.id, requestId)
+        ).get();
+
+        if (!request) {
+            return APIResponse.notFound(c, "Stable inclusion request not found");
+        }
+
+        if (request.status !== 'pending') {
+            return APIResponse.conflict(c, "Stable inclusion request already resolved");
+        }
+
+        if (decisionBody.decision === 'approve') {
+            const alreadyStable = await AptlyAPI.Packages.existsInRepo(
+                "leios-stable",
+                request.package_name,
+                request.version,
+                request.leios_patch as number | undefined,
+                request.architecture as AptlyAPI.Utils.Architectures
+            );
+
+            if (!alreadyStable) {
+                const existsInArchive = await AptlyAPI.Packages.existsInRepo(
+                    "leios-archive",
+                    request.package_name,
+                    request.version,
+                    request.leios_patch as number | undefined,
+                    request.architecture as AptlyAPI.Utils.Architectures
+                );
+
+                if (!existsInArchive) {
+                    return APIResponse.notFound(c, "Requested version not found in archive repository");
+                }
+
+                try {
+                    await AptlyAPI.Packages.copyIntoRepo(
+                        "leios-stable",
+                        request.package_name,
+                        request.version,
+                        request.leios_patch as number | undefined,
+                        request.architecture as AptlyAPI.Utils.Architectures
+                    );
+                } catch (error) {
+                    return APIResponse.serverError(c, "Failed to copy package into stable repository: " + error);
+                }
+            }
+        }
+
+        await DB.instance().update(DB.Schema.stableInclusionRequests).set({
+            status: decisionBody.decision === 'approve' ? 'approved' : 'denied',
+            reviewed_by: authContext.user_id,
+            decision_reason: decisionBody.reason ?? null,
+        }).where(
+            eq(DB.Schema.stableInclusionRequests.id, requestId)
+        ).run();
+
+        const updatedRequest = DB.instance().select().from(DB.Schema.stableInclusionRequests).where(
+            eq(DB.Schema.stableInclusionRequests.id, requestId)
+        ).get();
+
+        return APIResponse.success(c, "Stable inclusion request updated", updatedRequest!);
+    }
+);
+
+router.get('/',
+
+    APIRouteSpec.authenticated({
+        summary: "List packages",
+        description: "Retrieve all packages registered across the platform.",
+        tags: [ADMIN_PACKAGES_TAG],
+        responses: APIResponseSpec.describeBasic(
+            APIResponseSpec.success("Packages retrieved successfully", AdminPackageModel.ListResponse)
+        )
+    }),
+
+    async (c) => {
+        const packages = await DB.instance().select().from(DB.Schema.packages);
+        return APIResponse.success(c, "Packages retrieved successfully", packages);
+    }
+);
+
+router.use('/:packageName/*',
+
+    zValidator("param", z.object({
+        packageName: z.string().min(1)
+    })),
+
+    async (c, next) => {
+        // @ts-ignore
+        const { packageName } = c.req.valid("param");
+
+        const pkg = DB.instance().select().from(DB.Schema.packages).where(
+            eq(DB.Schema.packages.name, packageName)
+        ).get();
+
+        if (!pkg) {
+            return APIResponse.notFound(c, "Package not found");
+        }
+
+        // @ts-ignore
+        c.set("package", pkg);
+
+        await next();
+    }
+);
+
+router.get('/:packageName',
+
+    APIRouteSpec.authenticated({
+        summary: "Get package details",
+        description: "Retrieve package metadata, releases across repositories, and related stable inclusion requests.",
+        tags: [ADMIN_PACKAGES_TAG],
+        responses: APIResponseSpec.describeBasic(
+            APIResponseSpec.success("Package retrieved successfully", AdminPackageModel.PackageDetails),
+            APIResponseSpec.notFound("Package not found")
+        )
+    }),
+
+    async (c) => {
+        // @ts-ignore
+        const pkg = c.get("package") as DB.Models.Package;
+
+        let releases;
+        try {
+            releases = await AptlyAPI.Packages.getAllInAllRepos(pkg.name);
+        } catch (error) {
+            return APIResponse.serverError(c, "Failed to fetch package releases: " + error);
+        }
+
+        const stableRequests = await DB.instance().select().from(DB.Schema.stableInclusionRequests).where(
+            eq(DB.Schema.stableInclusionRequests.package_name, pkg.name)
+        );
+
+        return APIResponse.success(c, "Package retrieved successfully", {
+            package: pkg,
+            releases,
+            stableRequests
+        });
+    }
+);
+
+router.get('/:packageName/stable-requests',
+
+    APIRouteSpec.authenticated({
+        summary: "List package stable requests",
+        description: "List stable inclusion requests for a specific package.",
+        tags: [ADMIN_STABLE_REQUESTS_TAG],
+        responses: APIResponseSpec.describeBasic(
+            APIResponseSpec.success("Stable inclusion requests retrieved successfully", StableRequestModel.List.Response),
+            APIResponseSpec.notFound("Package not found")
+        )
+    }),
+
+    zValidator("query", StableRequestModel.List.Query),
+
+    async (c) => {
+        // @ts-ignore
+        const pkg = c.get("package") as DB.Models.Package;
+        const filters = c.req.valid("query") as z.infer<typeof StableRequestModel.List.Query>;
+
+        let query = DB.instance().select().from(DB.Schema.stableInclusionRequests).where(
+            eq(DB.Schema.stableInclusionRequests.package_name, pkg.name)
+        ).$dynamic();
+
+        if (filters.status) {
+            query = query.where(eq(DB.Schema.stableInclusionRequests.status, filters.status));
+        }
+
+        const requests = await query;
+        return APIResponse.success(c, "Stable inclusion requests retrieved successfully", requests);
+    }
+);
+
+router.post('/:packageName/stable',
+
+    APIRouteSpec.authenticated({
+        summary: "Promote package version to stable",
+        description: "Copy a package version from archive into the stable repository without a pending request.",
+        tags: [ADMIN_PACKAGES_TAG],
+        responses: APIResponseSpec.describeWithWrongInputs(
+            APIResponseSpec.success("Package copied into stable repository", StableRequestModel.CopyToStable.Response),
+            APIResponseSpec.notFound("Package version not found in archive"),
+            APIResponseSpec.conflict("Package version already exists in stable"),
+            APIResponseSpec.serverError("Failed to copy package into stable repository")
+        )
+    }),
+
+    zValidator("json", StableRequestModel.CopyToStable.Body),
+
+    async (c) => {
+        // @ts-ignore
+        const pkg = c.get("package") as DB.Models.Package;
+        // @ts-ignore
+        const authContext = c.get("authContext") as AuthHandler.AuthContext;
+        const { version, arch, leios_patch } = c.req.valid("json") as StableRequestModel.CopyToStable.Body;
+
+        const alreadyStable = await AptlyAPI.Packages.existsInRepo(
+            "leios-stable",
+            pkg.name,
+            version,
+            leios_patch,
+            arch
+        );
+
+        if (alreadyStable) {
+            return APIResponse.conflict(c, "Package version already exists in stable repository");
+        }
+
+        const existsInArchive = await AptlyAPI.Packages.existsInRepo(
+            "leios-archive",
+            pkg.name,
+            version,
+            leios_patch,
+            arch
+        );
+
+        if (!existsInArchive) {
+            return APIResponse.notFound(c, "Package version not found in archive repository");
+        }
+
+        try {
+            await AptlyAPI.Packages.copyIntoRepo("leios-stable", pkg.name, version, leios_patch, arch);
+        } catch (error) {
+            return APIResponse.serverError(c, "Failed to copy package into stable repository: " + error);
+        }
+
+        await DB.instance().update(DB.Schema.stableInclusionRequests).set({
+            status: 'approved',
+            reviewed_by: authContext.user_id,
+            decision_reason: 'Approved by admin while copying to stable'
+        }).where(and(
+            eq(DB.Schema.stableInclusionRequests.package_name, pkg.name),
+            eq(DB.Schema.stableInclusionRequests.version, version),
+            eq(DB.Schema.stableInclusionRequests.architecture, arch),
+            eq(DB.Schema.stableInclusionRequests.status, 'pending')
+        )).run();
+
+        return APIResponse.success(c, "Package copied into stable repository", {
+            version,
+            arch,
+            leios_patch,
+            copied: true
+        } satisfies StableRequestModel.CopyToStable.Response);
+    }
+);

@@ -54,6 +54,7 @@ export namespace DB.Schema {
     export const apiKeys = TableSchema.apiKeys;
 
     export const packages = TableSchema.packages;
+    export const stableInclusionRequests = TableSchema.stableInclusionRequests;
 }
 
 export namespace DB.Models {
@@ -63,4 +64,5 @@ export namespace DB.Models {
     export type ApiKey = typeof DB.Schema.apiKeys.$inferSelect;
 
     export type Package = typeof DB.Schema.packages.$inferSelect;
+    export type StableInclusionRequest = typeof DB.Schema.stableInclusionRequests.$inferSelect;
 }

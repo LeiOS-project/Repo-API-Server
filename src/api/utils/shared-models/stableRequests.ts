@@ -45,8 +45,9 @@ export namespace StablePromotionRequestsModel.GetAll {
 
 export namespace StablePromotionRequestsModel.Create {
     export const Body = createInsertSchema(DB.Schema.stablePromotionRequests).omit({
+        id: true,
         package_id: true,
-        package_release_id: true,
+        // package_release_id: true,
         status: true,
         decision_reason: true
     });
@@ -75,13 +76,14 @@ export namespace StablePromotionRequestsModel.CopyToStable {
         leios_patch: z.number().int().nonnegative().optional(),
     });
 
+    export type Body = z.infer<typeof Body>;
+
     export const Response = z.object({
         version: z.string(),
         arch: z.enum(["amd64", "arm64"]),
         leios_patch: z.number().int().nonnegative().optional(),
         copied: z.literal(true)
     });
-    export type Body = z.infer<typeof Body>;
-    export type Response = z.infer<typeof Response>;
 
+    export type Response = z.infer<typeof Response>;
 }

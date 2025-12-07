@@ -77,7 +77,7 @@ export const packageReleases = sqliteTable('package_releases', {
     id: int().primaryKey({ autoIncrement: true }),
     package_id: int().notNull().references(() => packages.id),
     version: text().notNull(),
-    leios_patch: int(),
+    leios_patch: text(),
     architecture: text({ enum: ['amd64', 'arm64'] }).notNull(),
 });
 
@@ -87,7 +87,7 @@ export const packageReleases = sqliteTable('package_releases', {
 export const stablePromotionRequests = sqliteTable('stable_promotion_requests', {
     id: int().primaryKey({ autoIncrement: true }),
     package_id: int().notNull().references(() => packages.id),
-    package_release_id: int().notNull().references(() => packageReleases.id),
+    package_release_id: int().unique().notNull().references(() => packageReleases.id),
     status: text({ enum: ['pending', 'approved', 'denied'] }).default('pending').notNull(),
     decision_reason: text(),
 });

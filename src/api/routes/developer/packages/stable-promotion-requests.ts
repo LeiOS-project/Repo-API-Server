@@ -55,78 +55,34 @@ router.post('/',
             APIResponseSpec.created("Stable promotion request submitted", StablePromotionRequestsModel.Create.Response),
             APIResponseSpec.badRequest("Owner user ID does not correspond to a developer account / Bad Request: Syntax or validation error in request"),
             APIResponseSpec.notFound("Release not found in archive repository"),
-            APIResponseSpec.conflict("A pending request already exists or the release is already stable")
+            APIResponseSpec.conflict("A request already for this release already exists or the release is already stable")
         )
     }),
 
+    zValidator("json", StablePromotionRequestsModel.Create.Body),
+    
+    async (c) => {
+        const requestData = c.req.valid("json");
+
+        // @ts-ignore
+        const packageData = c.get("package") as DB.Models.Package;
+
+        const existingRelease = DB.instance().select().from(DB.Schema.packageReleases).where(and(
+            eq(DB.Schema.packageReleases.id, requestData.package_release_id),
+            eq(DB.Schema.packageReleases.package_id, packageData.id)
+        )).get();
+
+        if (!existingRelease) {
+            return APIResponse.notFound(c, "Release not found in archive repository");
+        }
+
+        const alreadyExists = DB.instance().select().from(DB.Schema.stablePromotionRequests).where(
+            eq(DB.Schema.stablePromotionRequests.package_release_id, requestData.package_release_id)
+        ).get();
+
+        if (alreadyExists) {
+            return APIResponse.conflict(c, "A request already for this release already exists or the release is already stable");
+        }
+
+    }
 )
-// router.post('/:packageID/stable-requests',
-
-//     APIRouteSpec.authenticated({
-//         summary: "Request promotion to stable",
-//         description: "Submit a request for an existing release to be copied into the stable repository.",
-//         tags: [DOCS_TAGS.DEV_API.PACKAGES_STABLE_REQUESTS],
-
-//         responses: APIResponseSpec.describeWithWrongInputs(
-//             APIResponseSpec.created("Stable promotion request submitted", StableRequestModel.Create.Response),
-//             APIResponseSpec.notFound("Release not found in archive repository"),
-//             APIResponseSpec.conflict("A pending request already exists or the release is already stable")
-//         )
-//     }),
-
-//     zValidator("json", StableRequestModel.Create.Body),
-
-//     async (c) => {
-//         // @ts-ignore
-//         const packageData = c.get("package") as DB.Models.Package;
-//         // @ts-ignore
-//         const authContext = c.get("authContext") as AuthHandler.AuthContext;
-
-//         const { version, arch, leios_patch } = c.req.valid("json") as StableRequestModel.Create.Body;
-
-//         const existsInArchive = await AptlyAPI.Packages.existsInRepo(
-//             "leios-archive",
-//             packageData.name,
-//             version,
-//             leios_patch,
-//             arch
-//         );
-
-//         if (!existsInArchive) {
-//             return APIResponse.notFound(c, "Release not found in archive repository");
-//         }
-
-//         const alreadyStable = await AptlyAPI.Packages.existsInRepo(
-//             "leios-stable",
-//             packageData.name,
-//             version,
-//             leios_patch,
-//             arch
-//         );
-
-//         if (alreadyStable) {
-//             return APIResponse.conflict(c, "Release already available in stable repository");
-//         }
-
-//         const existingPending = DB.instance().select().from(DB.Schema.stablePromotionRequests).where(and(
-//             eq(DB.Schema.stablePromotionRequests.package_name, packageData.name),
-//             eq(DB.Schema.stablePromotionRequests.version, version),
-//             eq(DB.Schema.stablePromotionRequests.architecture, arch),
-//             eq(DB.Schema.stablePromotionRequests.status, 'pending')
-//         )).get();
-
-//         if (existingPending) {
-//             return APIResponse.conflict(c, "A pending request already exists for this version and architecture");
-//         }
-
-//         const inserted = DB.instance().insert(DB.Schema.stablePromotionRequests).values({
-//             package_name: packageData.name,
-//             version,
-//             leios_patch,
-//             architecture: arch,
-//             requested_by: authContext.user_id,
-//         }).returning().get();
-
-//         return APIResponse.created(c, "Stable promotion request submitted", { id: inserted.id });
-//     }
-// );

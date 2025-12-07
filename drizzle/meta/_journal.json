@@ -15,6 +15,13 @@
       "when": 1765127295740,
       "tag": "0001_awesome_big_bertha",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1765131639534,
+      "tag": "0002_eminent_punisher",
+      "breakpoints": true
     }
   ]
 }

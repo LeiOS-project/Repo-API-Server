@@ -29,7 +29,7 @@ export namespace PackageModel.CreatePackage {
     export type Body = z.infer<typeof Body>;
 
     export const Response = z.object({
-        name: z.string(),
+        id: z.int().positive()
     });
     export type Response = z.infer<typeof Response>;
 

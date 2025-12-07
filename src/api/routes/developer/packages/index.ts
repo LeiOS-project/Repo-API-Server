@@ -10,6 +10,7 @@ import z from "zod";
 import { AptlyAPI } from "../../../../aptly/api";
 import { StableRequestModel } from "../../shared/stableRequests";
 import { router as releasesRouter } from "./releases/index";
+import { DOCS_TAGS } from "../../../docs";
 
 export const router = new Hono().basePath('/packages');
 
@@ -18,7 +19,7 @@ router.get('/',
     APIRouteSpec.authenticated({
         summary: "List packages",
         description: "Retrieve a list of available packages.",
-        tags: ['Developer API / Packages'],
+        tags: [DOCS_TAGS.DEV_API.PACKAGES],
 
         responses: APIResponseSpec.describeBasic(
             APIResponseSpec.success("Packages retrieved successfully", PackageModel.GetAll.Response)
@@ -42,11 +43,11 @@ router.post('/',
     APIRouteSpec.authenticated({
         summary: "Create a new package",
         description: "Create a new package under the authenticated developer's account.",
-        tags: ['Developer API / Packages'],
+        tags: [DOCS_TAGS.DEV_API.PACKAGES],
 
         responses: APIResponseSpec.describeWithWrongInputs(
             APIResponseSpec.created("Package created successfully", PackageModel.CreatePackage.Response),
-            APIResponseSpec.conflict("Conflict: Package with this name already exists")
+            APIResponseSpec.conflict("Package with this name already exists")
         )
     }),
 
@@ -68,32 +69,32 @@ router.post('/',
             owner_user_id: authContext.user_id
         }).returning().get();
 
-        return APIResponse.created(c, "Package created successfully", { name: result.name });
+        return APIResponse.created(c, "Package created successfully", { id: result.id });
     }
 );
 
 
 
-router.use('/:packageName/*',
+router.use('/:packageID/*',
 
     zValidator("param", z.object({
-        packageName: z.string().min(1)
+        packageID: z.int().positive()
     })),
 
     async (c, next) => {
         // @ts-ignore
-        const { packageName } = c.req.valid("param");
+        const { packageID } = c.req.valid("param");
 
         // @ts-ignore
         const authContext = c.get("authContext") as AuthHandler.AuthContext;
 
         const packageData = DB.instance().select().from(DB.Schema.packages).where(and(
-            eq(DB.Schema.packages.name, packageName),
+            eq(DB.Schema.packages.id, packageID),
             eq(DB.Schema.packages.owner_user_id, authContext.user_id)
         )).get();
 
         if (!packageData) {
-            return APIResponse.notFound(c, "Package with specified name not found");
+            return APIResponse.notFound(c, "Package with specified ID not found");
         }
         // @ts-ignore
         c.set("package", packageData);
@@ -103,16 +104,16 @@ router.use('/:packageName/*',
 );
 
 
-router.get('/:packageName',
+router.get('/:packageID',
 
     APIRouteSpec.authenticated({
         summary: "Get package details",
         description: "Retrieve details of a specific package.",
-        tags: ['Developer API / Packages'],
+        tags: [DOCS_TAGS.DEV_API.PACKAGES],
 
         responses: APIResponseSpec.describeBasic(
             APIResponseSpec.success("Package retrieved successfully", PackageModel.GetPackageById.Response),
-            APIResponseSpec.notFound("Package with specified name not found")
+            APIResponseSpec.notFound("Package with specified ID not found")
         )
     }),
 
@@ -124,16 +125,16 @@ router.get('/:packageName',
     }
 );
 
-router.put('/:packageName',
+router.put('/:packageID',
 
     APIRouteSpec.authenticated({
         summary: "Update package details",
         description: "Update details of a specific package owned by the authenticated developer.",
-        tags: ['Developer API / Packages'],
+        tags: [DOCS_TAGS.DEV_API.PACKAGES],
 
         responses: APIResponseSpec.describeWithWrongInputs(
             APIResponseSpec.successNoData("Package updated successfully"),
-            APIResponseSpec.notFound("Package with specified name not found")
+            APIResponseSpec.notFound("Package with specified ID not found")
         )
     }),
 
@@ -146,7 +147,7 @@ router.put('/:packageName',
         const updateData = c.req.valid("json");
 
         await DB.instance().update(DB.Schema.packages).set(updateData).where(
-            eq(DB.Schema.packages.name, packageData.name)
+            eq(DB.Schema.packages.id, packageData.id)
         );
 
         return APIResponse.successNoData(c, "Package updated successfully");
@@ -154,16 +155,16 @@ router.put('/:packageName',
 );
 
 
-router.get('/:packageName/stable-requests',
+router.get('/:packageID/stable-requests',
 
     APIRouteSpec.authenticated({
-        summary: "List stable inclusion requests",
-        description: "View stable inclusion requests for the selected package.",
-        tags: ['Developer API / Packages / Stable Requests'],
+        summary: "List stable promotion requests",
+        description: "View stable promotion requests for the selected package.",
+        tags: [DOCS_TAGS.DEV_API.PACKAGES_STABLE_REQUESTS],
 
         responses: APIResponseSpec.describeBasic(
-            APIResponseSpec.success("Stable inclusion requests retrieved successfully", StableRequestModel.List.Response),
-            APIResponseSpec.notFound("Package with specified name not found")
+            APIResponseSpec.success("Stable promotion requests retrieved successfully", StableRequestModel.List.Response),
+            APIResponseSpec.notFound("Package with specified ID not found")
         )
     }),
 
@@ -174,30 +175,30 @@ router.get('/:packageName/stable-requests',
         const packageData = c.get("package") as DB.Models.Package;
         const filters = c.req.valid("query") as z.infer<typeof StableRequestModel.List.Query>;
 
-        let query = DB.instance().select().from(DB.Schema.stableInclusionRequests).where(
-            eq(DB.Schema.stableInclusionRequests.package_name, packageData.name)
+        let query = DB.instance().select().from(DB.Schema.stablePromotionRequests).where(
+            eq(DB.Schema.stablePromotionRequests.package_name, packageData.name)
         ).$dynamic();
 
         if (filters.status) {
-            query = query.where(eq(DB.Schema.stableInclusionRequests.status, filters.status));
+            query = query.where(eq(DB.Schema.stablePromotionRequests.status, filters.status));
         }
 
         const requests = await query;
 
-        return APIResponse.success(c, "Stable inclusion requests retrieved successfully", requests);
+        return APIResponse.success(c, "Stable promotion requests retrieved successfully", requests);
     }
 );
 
 
-router.post('/:packageName/stable-requests',
+router.post('/:packageID/stable-requests',
 
     APIRouteSpec.authenticated({
         summary: "Request promotion to stable",
         description: "Submit a request for an existing release to be copied into the stable repository.",
-        tags: ['Developer API / Packages / Stable Requests'],
+        tags: [DOCS_TAGS.DEV_API.PACKAGES_STABLE_REQUESTS],
 
         responses: APIResponseSpec.describeWithWrongInputs(
-            APIResponseSpec.created("Stable inclusion request submitted", StableRequestModel.Create.Response),
+            APIResponseSpec.created("Stable promotion request submitted", StableRequestModel.Create.Response),
             APIResponseSpec.notFound("Release not found in archive repository"),
             APIResponseSpec.conflict("A pending request already exists or the release is already stable")
         )
@@ -237,18 +238,18 @@ router.post('/:packageName/stable-requests',
             return APIResponse.conflict(c, "Release already available in stable repository");
         }
 
-        const existingPending = DB.instance().select().from(DB.Schema.stableInclusionRequests).where(and(
-            eq(DB.Schema.stableInclusionRequests.package_name, packageData.name),
-            eq(DB.Schema.stableInclusionRequests.version, version),
-            eq(DB.Schema.stableInclusionRequests.architecture, arch),
-            eq(DB.Schema.stableInclusionRequests.status, 'pending')
+        const existingPending = DB.instance().select().from(DB.Schema.stablePromotionRequests).where(and(
+            eq(DB.Schema.stablePromotionRequests.package_name, packageData.name),
+            eq(DB.Schema.stablePromotionRequests.version, version),
+            eq(DB.Schema.stablePromotionRequests.architecture, arch),
+            eq(DB.Schema.stablePromotionRequests.status, 'pending')
         )).get();
 
         if (existingPending) {
             return APIResponse.conflict(c, "A pending request already exists for this version and architecture");
         }
 
-        const inserted = DB.instance().insert(DB.Schema.stableInclusionRequests).values({
+        const inserted = DB.instance().insert(DB.Schema.stablePromotionRequests).values({
             package_name: packageData.name,
             version,
             leios_patch,
@@ -256,17 +257,17 @@ router.post('/:packageName/stable-requests',
             requested_by: authContext.user_id,
         }).returning().get();
 
-        return APIResponse.created(c, "Stable inclusion request submitted", { id: inserted.id });
+        return APIResponse.created(c, "Stable promotion request submitted", { id: inserted.id });
     }
 );
 
 // Only admins can delete packages for now
-// router.delete('/:packageName',
+// router.delete('/:packageID',
 
 //     APIRouteSpec.authenticated({
 //         summary: "Delete a package",
 //         description: "Delete a specific package owned by the authenticated developer.",
-//         tags: ['Developer API / Packages'],
+//         tags: [DOCS_TAGS.DEV_API.PACKAGES],
 
 //         responses: APIResponseSpec.describeBasic(
 //             APIResponseSpec.successNoData("Package deleted successfully"),
@@ -288,4 +289,4 @@ router.post('/:packageName/stable-requests',
 //     }
 // );
 
-router.route('/:packageName', releasesRouter);
+router.route('/:packageID', releasesRouter);

@@ -66,3 +66,23 @@ export function setupDocs(app: Hono) {
     app.get('/docs', Scalar({ url: '/docs/openapi' }))
 
 }
+
+export const DOCS_TAGS = {
+    PUBLIC_API: {
+        BASE: "Public API",
+        PACKAGES: "Public API / Packages",
+        PACKAGES_RELEASES: "Public API / Packages / Releases",
+    },
+    DEV_API: {
+        BASE: "Developer API",
+        PACKAGES: "Developer API / Packages",
+        PACKAGES_RELEASES: "Developer API / Packages / Releases",
+        PACKAGES_STABLE_REQUESTS: "Developer API / Packages / Stable Requests",
+    },
+    ADMIN_API: {
+        BASE: "Admin API",
+        PACKAGES: "Admin API / Packages",
+        PACKAGES_RELEASES: "Admin API / Packages / Releases",
+        PACKAGES_STABLE_REQUESTS: "Admin API / Packages / Stable Requests",
+    }
+}

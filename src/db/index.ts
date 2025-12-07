@@ -55,7 +55,7 @@ export namespace DB.Schema {
 
     export const packages = TableSchema.packages;
     export const packageReleases = TableSchema.packageReleases;
-    export const stableInclusionRequests = TableSchema.stablePromotionRequests;
+    export const stablePromotionRequests = TableSchema.stablePromotionRequests;
 }
 
 export namespace DB.Models {
@@ -66,5 +66,5 @@ export namespace DB.Models {
 
     export type Package = typeof DB.Schema.packages.$inferSelect;
     export type PackageRelease = typeof DB.Schema.packageReleases.$inferSelect;
-    export type StableInclusionRequest = typeof DB.Schema.stableInclusionRequests.$inferSelect;
+    export type StablePromotionRequest = typeof DB.Schema.stablePromotionRequests.$inferSelect;
 }

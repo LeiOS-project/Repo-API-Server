@@ -1,21 +1,15 @@
-import z from "zod";
+import { z } from "zod";
+import { createInsertSchema } from "drizzle-zod";
+import { DB } from "../../../../db";
 import { PackageModel } from "../../developer/packages/model";
-import { AptlyAPI } from "../../../../aptly/api";
-import { StableRequestModel } from "../../shared/stableRequests";
 
-export namespace AdminPackageModel {
+export namespace AdminPackageModel.CreatePackage {
 
-    export const PackageDetails = z.object({
-        package: PackageModel.GetPackageById.Response,
-        releases: AptlyAPI.Packages.Models.getAllInAllReposResponse,
-        stableRequests: StableRequestModel.List.Response
+    export const Body = PackageModel.CreatePackage.Body.extend({
+        owner_user_id: z.number().positive()
     });
-    export type PackageDetails = z.infer<typeof PackageDetails>;
+    export type Body = z.infer<typeof Body>;
 
-    export const ListResponse = PackageModel.GetAll.Response;
-    export type ListResponse = z.infer<typeof ListResponse>;
-
-    export const StableRequestIdParams = z.object({
-        requestId: z.coerce.number().int().positive()
-    });
+    export const Response = PackageModel.CreatePackage.Response;
+    export type Response = PackageModel.CreatePackage.Response;
 }

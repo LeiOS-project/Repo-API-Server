@@ -7,7 +7,7 @@ export namespace StableRequestModel {
     export const Status = z.enum(["pending", "approved", "denied"]);
     export type Status = z.infer<typeof Status>;
 
-    export const Entity = createSelectSchema(DB.Schema.stableInclusionRequests);
+    export const Entity = createSelectSchema(DB.Schema.stablePromotionRequests);
     export type Entity = z.infer<typeof Entity>;
 
     export namespace List {

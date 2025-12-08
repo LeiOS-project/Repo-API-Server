@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { PackageReleaseModel } from './model'
+import { PackageReleaseModel } from '../../../../utils/shared-models/pkg-releases'
 import { validator as zValidator } from "hono-openapi";
 import { APIResponse } from "../../../../utils/api-res";
 import { APIResponseSpec, APIRouteSpec } from "../../../../utils/specHelpers";
@@ -8,6 +8,7 @@ import { DB } from "../../../../../db";
 import { AptlyAPI } from "../../../../../aptly/api";
 import { AuthHandler } from "../../../../utils/authHandler";
 import { eq, and } from "drizzle-orm";
+import { PkgReleasesService } from "../../../../utils/services/pkg-releases";
 
 export const router = new Hono().basePath('/releases');
 
@@ -24,12 +25,7 @@ router.get('/',
     }),
 
     async (c) => {
-        // @ts-ignore
-        const packageData = c.get("package") as DB.Models.Package;
-
-        const releases = await AptlyAPI.Packages.getAllInAllRepos(packageData.name);
-
-        return APIResponse.success(c, "Package releases retrieved successfully", releases);
+        return await PkgReleasesService.getAllReleases(c);
     }
 );
 
@@ -53,62 +49,17 @@ router.post('/:version/:arch',
         arch: z.enum(["amd64", "arm64"])
     })),
 
-    async (c) => {
-        // @ts-ignore
-        const authContext = c.get("authContext") as AuthHandler.AuthContext;
+    zValidator("query", z.object({
+        leios_patch: z.string().optional()
+    })),
 
+    async (c) => {
         const file = c.req.valid("form");
 
-        // @ts-ignore
-        const packageData = c.get("package") as DB.Models.Package;
-
         const { version, arch } = c.req.valid("param");
+        const { leios_patch } = c.req.valid("query");
 
-        const owner = DB.instance().select().from(DB.Schema.users).where(
-            eq(DB.Schema.users.id, authContext.user_id)
-        ).get();
-        if (!owner) {
-            return APIResponse.serverError(c, "Package owner not found");
-        }
-
-        const existingRelease = await AptlyAPI.Packages.existsInRepo("leios-archive", packageData.name, version, undefined, arch);
-        if (existingRelease) {
-            return APIResponse.conflict(c, "Package release with this version already exists");
-        }
-
-        try {
-            const result = await AptlyAPI.Packages.uploadAndVerify(
-                "leios-archive",
-                {
-                    name: packageData.name,
-                    version,
-                    architecture: arch,
-                    maintainer_name: owner.display_name,
-                    maintainer_email: owner.email,
-                },
-                file
-            );
-
-            if (!result) {
-                return APIResponse.serverError(c, "Failed to upload and verify package release");
-            }
-
-            // cleanup everything in testing repo first
-            const cleanupResult = await AptlyAPI.Packages.deleteInRepo("leios-testing", packageData.name);
-            if (!cleanupResult) {
-                return APIResponse.serverError(c, "Failed to clean up existing package releases in testing repository");
-            }
-
-            const copyResult = await AptlyAPI.Packages.copyIntoRepo("leios-testing", packageData.name, version, undefined, arch);
-            if (!copyResult) {
-                return APIResponse.serverError(c, "Failed to copy package release into testing repository");
-            }
-
-        } catch (error) {
-            return APIResponse.serverError(c, "Failed to upload and verify package release: " + error);
-        }
-
-        return APIResponse.created(c, "Package release created successfully", { version, arch });
+        return await PkgReleasesService.createRelease(c, file, version, arch, leios_patch || null, false);
     }
 );
 
@@ -124,18 +75,7 @@ router.use('/:releaseID/*',
         // @ts-ignore
         const { releaseID } = c.req.valid("param") as { releaseID: number };
 
-        // @ts-ignore
-        const packageData = c.get("package") as DB.Models.Package;
-        
-        const releaseData = DB.instance().select().from(DB.Schema.packageReleases).where(and(
-            eq(DB.Schema.packageReleases.id, releaseID),
-            eq(DB.Schema.packageReleases.package_id, packageData.id)
-        )).get();
-
-        // @ts-ignore
-        c.set("release", releaseData);
-
-        await next();
+        return await PkgReleasesService.pkgReleaseMiddleware(c, next, releaseID);
     }
 );
 
@@ -154,10 +94,7 @@ router.get('/:releaseID',
     }),
 
     async (c) => {
-        // @ts-ignore
-        const releaseData = c.get("release") as DB.Models.PackageRelease;
-
-        return APIResponse.success(c, "Package release retrieved successfully", releaseData);
+        return await PkgReleasesService.getPkgReleaseAfterMiddleware(c);
     }
 );
 

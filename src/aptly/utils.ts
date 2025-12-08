@@ -113,7 +113,7 @@ export class AptlyUtils {
 
 
 
-    static buildVersionWithLeiOSSuffix(version: string, leios_patch?: number) {
+    static buildVersionWithLeiOSSuffix(version: string, leios_patch?: string | null) {
         if (leios_patch) {
             if (version.endsWith(`leios${leios_patch}`)) {
                 return version;
@@ -124,20 +124,20 @@ export class AptlyUtils {
     }
 
     static getPackageIdentifier(packageName: string, fullPackageVersion: string, architecture: string): string;
-    static getPackageIdentifier(packageName: string, packageVersion: string, leios_patch: number | undefined, architecture: string): string;
-    static getPackageIdentifier(packageName: string, versionOrFullVersion: string, leios_patchOrArch: number | string | undefined, architectureOpt?: string) {
+    static getPackageIdentifier(packageName: string, packageVersion: string, leios_patch: string | null | undefined, architecture: string): string;
+    static getPackageIdentifier(packageName: string, versionOrFullVersion: string, leios_patchOrArch: string | null | undefined, architectureOpt?: string) {
 
         let fullPackageVersion: string;
 
-        if (typeof leios_patchOrArch === "number" || leios_patchOrArch === undefined) {
+        if (architectureOpt) {
             // Called with (packageName, packageVersion, leios_patch, architecture)
-            fullPackageVersion = this.buildVersionWithLeiOSSuffix(versionOrFullVersion, leios_patchOrArch as number | undefined);
+            fullPackageVersion = this.buildVersionWithLeiOSSuffix(versionOrFullVersion, leios_patchOrArch);
         } else {
             // Called with (packageName, fullPackageVersion, architecture)
             fullPackageVersion = versionOrFullVersion;
         }
 
-        const architecture = typeof leios_patchOrArch === "string" ? leios_patchOrArch : architectureOpt!;
+        const architecture = architectureOpt ? architectureOpt : leios_patchOrArch!;
 
         return `${packageName}_${fullPackageVersion}_${architecture}`;
     }

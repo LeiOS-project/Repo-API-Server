@@ -1,5 +1,5 @@
 import z from "zod";
-import { AptlyAPI } from "../../../../../aptly/api";
+import { AptlyAPI } from "../../../aptly/api";
 
 export namespace PackageReleaseModel.GetReleaseByVersion {
 

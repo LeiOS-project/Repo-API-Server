@@ -95,3 +95,20 @@ router.get('/:releaseID',
     }
 );
 
+router.delete('/:releaseID',
+
+    APIRouteSpec.authenticated({
+        summary: "Delete a package release",
+        description: "Delete a specific package release.",
+        tags: ['Developer API / Packages / Releases'],
+
+        responses: APIResponseSpec.describeBasic(
+            APIResponseSpec.successNoData("Package release deleted successfully"),
+            APIResponseSpec.notFound("Package release with specified ID not found")
+        )
+    }),
+
+    async (c) => {
+        return await PkgReleasesService.deletePkgReleaseAfterMiddlewareAsAdmin(c);
+    }
+);

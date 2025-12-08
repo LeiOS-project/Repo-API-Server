@@ -3,194 +3,30 @@ import { API } from "../src/api";
 import { DB } from "../src/db";
 import { SessionHandler } from "../src/api/utils/authHandler";
 import { AptlyAPI } from "../src/aptly/api";
+import { AptlyAPIServer } from "../src/aptly/server";
 import { migrate } from "drizzle-orm/bun-sqlite/migrator";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import { Database } from "bun:sqlite";
-import { mkdirSync, unlinkSync, existsSync } from "fs";
+import { mkdirSync, unlinkSync, existsSync, rmSync } from "fs";
 import { randomUUID } from "crypto";
 import { eq } from "drizzle-orm";
 
 const TEST_DB_PATH = "./data/test-api.sqlite";
+const APTLY_ROOT = `./data/test-aptly-${randomUUID().slice(0, 8)}`;
+const APTLY_PORT = 18111;
+const PACKAGE_FILE_PATH = "./testdata/fastfetch_2.55.0_amd64.deb";
+const PACKAGE_NAME = "fastfetch";
+const PACKAGE_VERSION = "2.55.0";
+const PACKAGE_ARCH: Arch = "amd64";
+const PACKAGE_MAINTAINER_NAME = "Carter Li";
+const PACKAGE_MAINTAINER_EMAIL = "zhangsongcui@live.cn";
 
 type Repo = AptlyAPI.Utils.Repos;
 type Arch = AptlyAPI.Utils.Architectures;
 
-type RepoStore = Record<string, Partial<Record<Arch, AptlyAPI.Packages.Models.PackageInfo>>>;
-type PackageStore = Record<Repo, Record<string, RepoStore>>;
-
-const aptStore = new Map<string, PackageStore>();
-
-const originalAptlyPackages = { ...AptlyAPI.Packages } as Record<string, any>;
-const originalAptlyDBCleanup = AptlyAPI.DB.cleanup;
+const createdAptPackages = new Set<string>();
 
 let app: any;
-
-function ensurePackage(name: string): PackageStore {
-    if (!aptStore.has(name)) {
-        aptStore.set(name, {
-            "leios-archive": {},
-            "leios-testing": {},
-            "leios-stable": {}
-        });
-    }
-    return aptStore.get(name)!;
-}
-
-function recordRelease(repo: Repo, name: string, version: string, arch: Arch, leios_patch?: string | null) {
-    const pkgInfo: AptlyAPI.Packages.Models.PackageInfo = {
-        name,
-        key: `${name}-${version}-${arch}`,
-        version,
-        leios_patch: leios_patch ?? undefined,
-        architecture: arch,
-        maintainer: "Test Maintainer <maintainer@example.com>",
-        description: `${name} ${version}`
-    };
-
-    const repoStore = ensurePackage(name)[repo];
-    if (!repoStore[version]) {
-        repoStore[version] = {};
-    }
-    repoStore[version][arch] = pkgInfo;
-}
-
-function resetAptStore() {
-    aptStore.clear();
-}
-
-function mockAptlyApi() {
-    (AptlyAPI.DB as any).cleanup = async () => true;
-
-    (AptlyAPI.Packages as any).uploadAndVerify = async (
-        repo: Repo,
-        data: {
-            name: string;
-            maintainer_name: string;
-            maintainer_email: string;
-            version: string;
-            leios_patch?: string;
-            architecture: Arch;
-        }
-    ) => {
-        recordRelease(repo, data.name, data.version, data.architecture, data.leios_patch ?? null);
-        return true;
-    };
-
-    (AptlyAPI.Packages as any).copyIntoRepo = async (
-        targetRepo: Repo,
-        packageName: string,
-        version: string,
-        leios_patch: string | undefined,
-        packageArch: Arch
-    ) => {
-        recordRelease(targetRepo, packageName, version, packageArch, leios_patch ?? null);
-        return true;
-    };
-
-    (AptlyAPI.Packages as any).deleteInRepo = async (
-        repoName: Repo,
-        packageName: string,
-        packageVersion?: string,
-        leios_patch?: string,
-        packageArch?: Arch
-    ) => {
-        const pkg = aptStore.get(packageName);
-        if (!pkg) return true;
-
-        const repoData = pkg[repoName];
-        if (packageVersion) {
-            const versions = repoData[packageVersion];
-            if (versions && packageArch) {
-                delete versions[packageArch];
-            }
-            if (!packageArch) {
-                delete repoData[packageVersion];
-            }
-        } else {
-            Object.keys(repoData).forEach((ver) => delete repoData[ver]);
-        }
-        return true;
-    };
-
-    (AptlyAPI.Packages as any).deleteAllInAllRepos = async (
-        packageName: string,
-        packageVersion?: string,
-        leios_patch?: string,
-        packageArch?: Arch
-    ) => {
-        for (const repo of AptlyAPI.Utils.REPOS) {
-            await (AptlyAPI.Packages as any).deleteInRepo(repo, packageName, packageVersion, leios_patch, packageArch);
-        }
-        return true;
-    };
-
-    (AptlyAPI.Packages as any).getAllInRepo = async (repoName: Repo, packageName: string) => {
-        const pkg = ensurePackage(packageName);
-        return pkg[repoName];
-    };
-
-    (AptlyAPI.Packages as any).getAllInAllRepos = async (packageName: string) => {
-        const pkg = ensurePackage(packageName);
-        return pkg;
-    };
-
-    (AptlyAPI.Packages as any).getRefInRepo = async (
-        repoName: Repo,
-        packageName: string,
-        packageVersion?: string,
-        _leios_patch?: string,
-        packageArch?: Arch
-    ) => {
-        const pkg = ensurePackage(packageName)[repoName];
-        const refs: string[] = [];
-        const versions = packageVersion ? { [packageVersion]: pkg[packageVersion] } : pkg;
-        Object.values(versions).forEach((entry) => {
-            if (!entry) return;
-            if (packageArch) {
-                const release = entry[packageArch];
-                if (release) refs.push(release.key);
-            } else {
-                Object.values(entry).forEach((release) => release && refs.push(release.key));
-            }
-        });
-        return refs;
-    };
-
-    (AptlyAPI.Packages as any).getInRepo = async (
-        repoName: Repo,
-        packageName: string,
-        packageVersion?: string,
-        _leios_patch?: string,
-        packageArch?: Arch
-    ) => {
-        const pkg = ensurePackage(packageName)[repoName];
-        const versions = packageVersion ? { [packageVersion]: pkg[packageVersion] } : pkg;
-        const releases: AptlyAPI.Packages.Models.PackageInfo[] = [];
-        Object.values(versions).forEach((entry) => {
-            if (!entry) return;
-            const architectures = packageArch ? { [packageArch]: entry[packageArch] } : entry;
-            Object.values(architectures).forEach((release) => release && releases.push(release));
-        });
-        return releases;
-    };
-
-    (AptlyAPI.Packages as any).existsInRepo = async (
-        repoName: Repo,
-        packageName: string,
-        packageVersion?: string,
-        leios_patch?: string,
-        packageArch?: Arch
-    ) => {
-        const refs = await (AptlyAPI.Packages as any).getRefInRepo(repoName, packageName, packageVersion, leios_patch, packageArch);
-        return refs.length > 0;
-    };
-}
-
-function restoreAptlyApi() {
-    Object.assign(AptlyAPI.Packages as any, originalAptlyPackages);
-    (AptlyAPI.DB as any).cleanup = originalAptlyDBCleanup;
-}
-
 async function resetDatabase() {
     await DB.instance().delete(DB.Schema.stablePromotionRequests).run();
     await DB.instance().delete(DB.Schema.packageReleases).run();
@@ -199,6 +35,14 @@ async function resetDatabase() {
     await DB.instance().delete(DB.Schema.sessions).run();
     await DB.instance().delete(DB.Schema.passwordResets).run();
     await DB.instance().delete(DB.Schema.users).run();
+}
+
+async function cleanupAptly() {
+    for (const name of createdAptPackages) {
+        await AptlyAPI.Packages.deleteAllInAllRepos(name);
+    }
+    await AptlyAPI.DB.cleanup();
+    createdAptPackages.clear();
 }
 
 async function seedUser(role: "admin" | "developer" | "user", overrides: Partial<DB.Models.User> = {}, password = "TestP@ssw0rd") {
@@ -246,28 +90,56 @@ beforeAll(async () => {
         unlinkSync(TEST_DB_PATH);
     }
 
+    if (existsSync(APTLY_ROOT)) {
+        rmSync(APTLY_ROOT, { recursive: true, force: true });
+    }
+    mkdirSync(APTLY_ROOT, { recursive: true });
+
+    await AptlyAPIServer.init({ aptlyRoot: APTLY_ROOT, aptlyPort: APTLY_PORT });
+    await AptlyAPIServer.start();
+
     const sqlite = new Database(TEST_DB_PATH);
     const drizzleDb = drizzle(sqlite);
     await migrate(drizzleDb, { migrationsFolder: "drizzle" });
     // @ts-ignore - inject test database directly
     DB["db"] = drizzleDb;
-
-    mockAptlyApi();
     await API.init();
     app = (API as any).app;
 });
 
 afterEach(async () => {
     await resetDatabase();
-    resetAptStore();
+    await cleanupAptly();
 });
 
 afterAll(async () => {
-    restoreAptlyApi();
+    await AptlyAPIServer.stop("SIGINT");
+    if (existsSync(APTLY_ROOT)) {
+        rmSync(APTLY_ROOT, { recursive: true, force: true });
+    }
     if (existsSync(TEST_DB_PATH)) {
         unlinkSync(TEST_DB_PATH);
     }
 });
+
+async function uploadFixtureToArchive(packageName: string, version: string, arch: Arch) {
+    const file = new File([await Bun.file(PACKAGE_FILE_PATH).arrayBuffer()], "package.deb");
+
+    await AptlyAPI.Packages.uploadAndVerify(
+        "leios-archive",
+        {
+            name: packageName,
+            version,
+            architecture: arch,
+            maintainer_name: PACKAGE_MAINTAINER_NAME,
+            maintainer_email: PACKAGE_MAINTAINER_EMAIL,
+        },
+        file,
+        true
+    );
+
+    createdAptPackages.add(packageName);
+}
 
 describe("Auth routes", () => {
     test("POST /auth/login authenticates and creates session", async () => {
@@ -381,8 +253,9 @@ describe("Account routes", () => {
 describe("Public package routes", () => {
     test("Lists packages and returns details with releases", async () => {
         const { user } = await seedUser("developer");
-        const pkg = await seedPackage(user.id, { name: "public-pkg" });
-        recordRelease("leios-archive", pkg.name, "1.0.0", "amd64");
+        const pkg = await seedPackage(user.id, { name: PACKAGE_NAME });
+
+        await uploadFixtureToArchive(PACKAGE_NAME, PACKAGE_VERSION, PACKAGE_ARCH);
 
         const listRes = await app.request("/public/packages");
         expect(listRes.status).toBe(200);
@@ -394,7 +267,7 @@ describe("Public package routes", () => {
         expect(detailRes.status).toBe(200);
         const detailBody = await detailRes.json();
         expect(detailBody.data.package.name).toBe(pkg.name);
-        expect(detailBody.data.releases["leios-archive"]["1.0.0"].amd64.name).toBe(pkg.name);
+        expect(detailBody.data.releases["leios-archive"][PACKAGE_VERSION].amd64.name).toBe(pkg.name);
     });
 });
 
@@ -439,9 +312,12 @@ describe("Developer package routes", () => {
     });
 
     test("Developer release lifecycle stores data", async () => {
-        const { user } = await seedUser("developer");
+        const { user } = await seedUser("developer", {
+            display_name: PACKAGE_MAINTAINER_NAME,
+            email: PACKAGE_MAINTAINER_EMAIL
+        });
         const session = await SessionHandler.createSession(user.id);
-        const pkg = await seedPackage(user.id, { name: "release-pkg" });
+        const pkg = await seedPackage(user.id, { name: PACKAGE_NAME });
 
         const listBefore = await app.request(`/dev/packages/${pkg.id}/releases`, {
             headers: authHeaders(session.token)
@@ -450,11 +326,11 @@ describe("Developer package routes", () => {
         expect(listBefore.status).toBe(200);
         expect(emptyBody.data).toEqual([]);
 
-        const file = new File(["content"], "pkg.deb");
+        const file = new File([await Bun.file(PACKAGE_FILE_PATH).arrayBuffer()], "package.deb");
         const form = new FormData();
         form.set("file", file);
 
-        const createRes = await app.request(`/dev/packages/${pkg.id}/releases/1.2.3/amd64`, {
+        const createRes = await app.request(`/dev/packages/${pkg.id}/releases/${PACKAGE_VERSION}/${PACKAGE_ARCH}`, {
             method: "POST",
             headers: authHeaders(session.token),
             body: form
@@ -463,8 +339,10 @@ describe("Developer package routes", () => {
         expect(createRes.status).toBe(201);
         expect(createBody.message).toBe("Package release created successfully");
 
+        createdAptPackages.add(PACKAGE_NAME);
+
         const dbRelease = DB.instance().select().from(DB.Schema.packageReleases).where(eq(DB.Schema.packageReleases.package_id, pkg.id)).get();
-        expect(dbRelease?.version).toBe("1.2.3");
+        expect(dbRelease?.version).toBe(PACKAGE_VERSION);
 
         const listAfter = await app.request(`/dev/packages/${pkg.id}/releases`, {
             headers: authHeaders(session.token)

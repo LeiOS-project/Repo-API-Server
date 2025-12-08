@@ -90,7 +90,7 @@ export class AptlyAPIServer {
             baseUrl: `http://127.0.0.1:${this.settings.aptlyPort}`
         });
 
-        await this.createDefaultRepositoriesIfNeeded();
+        await AptlyUtils.createDefaultRepositoriesIfNeeded();
     }
 
     protected static async setupAptlyConfig(overrideConfig: Record<string, any> = {}) {
@@ -125,61 +125,6 @@ export class AptlyAPIServer {
             Logger.info(`Aptly config successfully setup`);
         } catch (error) {
             throw new Error("Failed to write Aptly config: " + error);
-        }
-
-    }
-
-    protected static async createDefaultRepositoriesIfNeeded() {
-
-        try {
-
-            const existReposResponse = (await this.getClient().getApiRepos({}));
-
-            if (!existReposResponse.data) {
-                throw new Error("Failed to fetch existing repositories: " + existReposResponse.error);
-            }
-            const existingRepos = existReposResponse.data;
-
-            if (!existingRepos.some(repo => repo.Name === "leios-stable")) {
-                await this.getClient().postApiRepos({
-                    body: {
-                        Name: "leios-stable",
-                        DefaultComponent: "main",
-                        DefaultDistribution: "stable"
-                    }
-                });
-
-                Logger.info("Repository 'leios-stable' created.");
-            }
-
-            if (!existingRepos.some(repo => repo.Name === "leios-testing")) {
-                await this.getClient().postApiRepos({
-                    body: {
-                        Name: "leios-testing",
-                        DefaultComponent: "main",
-                        DefaultDistribution: "testing"
-                    }
-                });
-
-                Logger.info("Repository 'leios-testing' created.");
-            }
-
-            // the archive repo is not published by default, its just to hold every package version in history
-            if (!existingRepos.some(repo => repo.Name === "leios-archive")) {
-                await this.getClient().postApiRepos({
-                    body: {
-                        Name: "leios-archive",
-                        DefaultComponent: "main",
-                        DefaultDistribution: "archive"
-                    }
-                });
-
-                Logger.info("Repository 'leios-archive' created.");
-            }
-
-        } catch (error) {
-            Logger.error("Failed to create default repositories: ", error);
-            throw new Error("Failed to create default repositories: " + error);
         }
 
     }

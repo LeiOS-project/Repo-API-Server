@@ -2,6 +2,7 @@ import { Logger } from "../utils/logger";
 import fs from 'fs/promises';
 import path from 'path';
 import z from "zod";
+import { AptlyAPIServer } from "./server";
 
 export class AptlyUtils {
 
@@ -94,6 +95,139 @@ export class AptlyUtils {
         };
 
         pump();
+    }
+
+    static async createDefaultRepositoriesIfNeeded() {
+
+        try {
+
+            const existReposResponse = (await AptlyAPIServer.getClient().getApiRepos({}));
+
+            if (!existReposResponse.data) {
+                throw new Error("Failed to fetch existing repositories: " + existReposResponse.error);
+            }
+            const existingRepos = existReposResponse.data;
+
+            if (!existingRepos.some(repo => repo.Name === "leios-stable")) {
+                await AptlyAPIServer.getClient().postApiRepos({
+                    body: {
+                        Name: "leios-stable",
+                        DefaultComponent: "main",
+                        DefaultDistribution: "stable"
+                    }
+                });
+
+                Logger.info("Repository 'leios-stable' created.");
+            }
+
+            if (!existingRepos.some(repo => repo.Name === "leios-testing")) {
+                await AptlyAPIServer.getClient().postApiRepos({
+                    body: {
+                        Name: "leios-testing",
+                        DefaultComponent: "main",
+                        DefaultDistribution: "testing"
+                    }
+                });
+
+                Logger.info("Repository 'leios-testing' created.");
+            }
+
+            // the archive repo is not published by default, its just to hold every package version in history
+            if (!existingRepos.some(repo => repo.Name === "leios-archive")) {
+                await AptlyAPIServer.getClient().postApiRepos({
+                    body: {
+                        Name: "leios-archive",
+                        DefaultComponent: "main",
+                        DefaultDistribution: "archive"
+                    }
+                });
+
+                Logger.info("Repository 'leios-archive' created.");
+            }
+
+        } catch (error) {
+            Logger.error("Failed to create default repositories: ", error);
+            throw new Error("Failed to create default repositories: " + error);
+        }
+
+    }
+
+    static async initialRepoPublish() {
+
+        try {
+
+            const existingPublishedReposResult = await AptlyAPIServer.getClient().getApiPublish({});
+            if (!existingPublishedReposResult.data) {
+                throw new Error("Failed to fetch existing published repositories: " + existingPublishedReposResult.error);
+            }
+            const existingPublishedRepos = existingPublishedReposResult.data;
+
+            if (!existingPublishedRepos.some(pub => pub.Storage === "s3:leios-live-repo" && pub.Distribution === "testing")) {
+                const testingPublishResult = await AptlyAPIServer.getClient().postApiPublishByPrefix({
+                    path: {
+                        prefix: "s3:leios-live-repo",
+                    },
+                    body: {
+                        SourceKind: "local",
+                        Sources: [
+                            {
+                                Name: "leios-testing",
+                                Component: "main"
+                            }
+                        ],
+                        Distribution: "testing"
+                    }
+                });
+
+                Logger.info("Pubklished initial state of 'leios-testing' repository.");
+                if (!testingPublishResult.data) {
+                    throw new Error("Failed to publish 'leios-testing' repository: " + testingPublishResult.error);
+                }
+            }
+
+            if (!existingPublishedRepos.some(pub => pub.Storage === "s3:leios-live-repo" && pub.Distribution === "stable")) {
+                const createSnapshotResult = await AptlyAPIServer.getClient().postApiReposByNameSnapshots({
+                    path: {
+                        name: "leios-stable"
+                    },
+                    body: {
+                        Name: `leios-stable-0000.00.0`,
+                        Description: "Initial stable snapshot. This snapshot is empty.",
+                    }
+                });
+                if (!createSnapshotResult.data) {
+                    throw new Error("Failed to create initial snapshot for 'leios-stable' repository: " + createSnapshotResult.error);
+                }
+
+                const stablePublishResult = await AptlyAPIServer.getClient().postApiPublishByPrefix({
+                    path: {
+                        prefix: "s3:leios-live-repo",
+                    },
+                    body: {
+                        SourceKind: "snapshot",
+                        Sources: [
+                            {
+                                Name: "leios-stable-0000.00.0",
+                                Component: "main"
+                            }
+                        ],
+                        Distribution: "stable"
+                    }
+                });
+
+                Logger.info("Published initial state of 'leios-stable' repository.");
+
+                if (!stablePublishResult.data) {
+                    throw new Error("Failed to publish 'leios-stable' repository: " + stablePublishResult.error);
+                }
+            }
+
+
+        } catch (error) {
+            Logger.error("Failed to perform initial repository publish: ", error);
+            throw new Error("Failed to perform initial repository publish: " + error);
+        }
+
     }
 
     static extractVersionAndPatchSuffix(fullVersion: string) {

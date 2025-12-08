@@ -255,6 +255,17 @@ export namespace AptlyAPI.Packages {
 
 }
 
+export namespace AptlyAPI.Publishing {
+
+    // testing repo is updated continuously without snapshots
+    export function updateLiveTestingRepo() {
+
+        const result = AptlyAPIServer.getClient().post
+
+    }
+
+}
+
 export namespace AptlyAPI.Packages.Models {
 
     export const PackageInfo = z.object({

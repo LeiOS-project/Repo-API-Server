@@ -2,7 +2,8 @@ import { sql } from 'drizzle-orm';
 import {
     sqliteTable,
     int,
-    text
+    text,
+    
 } from 'drizzle-orm/sqlite-core';
 
 /**
@@ -63,6 +64,7 @@ export const packages = sqliteTable('packages', {
     owner_user_id: int().notNull().references(() => users.id),
     description: text().notNull(),
     homepage_url: text().notNull(),
+    requires_patching: int({ mode: 'boolean' }).notNull().default(sql`0`),
     // version strings of version + leios patch if exists
     latest_stable_release_amd64: text(),
     latest_stable_release_arm64: text(),

@@ -8,6 +8,12 @@ export class Main {
 
     static async main() {
 
+        process.once("SIGINT", (type) => Main.gracefulShutdown(type, 0));
+        process.once("SIGTERM", (type) => Main.gracefulShutdown(type, 0));
+
+        process.once("uncaughtException", Main.handleUncaughtException);
+        process.once("unhandledRejection", Main.handleUnhandledRejection);
+
         const config = await ConfigHandler.loadConfig();
 
         Logger.setLogLevel(config.LRA_LOG_LEVEL ?? "info");
@@ -38,16 +44,37 @@ export class Main {
             config.LRA_API_HOST ?? "::"
         );
 
-        process.on("SIGINT", (type) => this.onKill(type));
-        process.on("SIGTERM", (type) => this.onKill(type));
-
     }
 
-    private static onKill(type: NodeJS.Signals) {
-        Logger.log(`Received ${type}, shutting down...`);
-        API.stop();
-        AptlyAPIServer.stop(type);
-        process.exit();
+    private static gracefulShutdown(type: NodeJS.Signals, code: number) {
+        try {
+            Logger.log(`Received ${type}, shutting down...`);
+            API.stop();
+            AptlyAPIServer.stop(type);
+            process.exit(code);
+        } catch {
+            Logger.critical("Error during shutdown, forcing exit");
+            this.forceShutdown();
+        }
+    }
+
+    private static forceShutdown() {
+        process.once("SIGTERM", ()=>{});
+        process.exit(1);
+    }
+
+    private static async handleUncaughtException(error: Error) {
+        Logger.critical(`Uncaught Exception:\n${error.stack}`);
+        this.gracefulShutdown("SIGTERM", 1);
+    }
+
+    private static async handleUnhandledRejection(reason: any) {
+        if (reason.stack) {
+            // reason is an error
+            return this.handleUncaughtException(reason);
+        }
+        Logger.critical(`Unhandled Rejection:\n${reason}`);
+        this.gracefulShutdown("SIGTERM", 1);
     }
 
 }

@@ -153,78 +153,74 @@ export class AptlyUtils {
 
     static async initialRepoPublishIfNeeded() {
 
-        try {
 
-            const existingPublishedReposResult = await AptlyAPIServer.getClient().getApiPublish({});
-            if (!existingPublishedReposResult.data) {
-                throw new Error("Failed to fetch existing published repositories: " + existingPublishedReposResult.error);
-            }
-            const existingPublishedRepos = existingPublishedReposResult.data;
-
-            if (!existingPublishedRepos.some(pub => pub.Storage === "s3:leios-live-repo" && pub.Distribution === "testing")) {
-                const testingPublishResult = await AptlyAPIServer.getClient().postApiPublishByPrefix({
-                    path: {
-                        prefix: "s3:leios-live-repo",
-                    },
-                    body: {
-                        SourceKind: "local",
-                        Sources: [
-                            {
-                                Name: "leios-testing",
-                                Component: "main"
-                            }
-                        ],
-                        Distribution: "testing"
-                    }
-                });
-
-                Logger.info("Pubklished initial state of 'leios-testing' repository.");
-                if (!testingPublishResult.data) {
-                    throw new Error("Failed to publish 'leios-testing' repository: " + testingPublishResult.error);
-                }
-            }
-
-            if (!existingPublishedRepos.some(pub => pub.Storage === "s3:leios-live-repo" && pub.Distribution === "stable")) {
-                const createSnapshotResult = await AptlyAPIServer.getClient().postApiReposByNameSnapshots({
-                    path: {
-                        name: "leios-stable"
-                    },
-                    body: {
-                        Name: `leios-stable-0000.00.0`,
-                        Description: "Initial stable snapshot. This snapshot is empty.",
-                    }
-                });
-                if (!createSnapshotResult.data) {
-                    throw new Error("Failed to create initial snapshot for 'leios-stable' repository: " + createSnapshotResult.error);
-                }
-
-                const stablePublishResult = await AptlyAPIServer.getClient().postApiPublishByPrefix({
-                    path: {
-                        prefix: "s3:leios-live-repo",
-                    },
-                    body: {
-                        SourceKind: "snapshot",
-                        Sources: [
-                            {
-                                Name: "leios-stable-0000.00.0",
-                                Component: "main"
-                            }
-                        ],
-                        Distribution: "stable"
-                    }
-                });
-
-                Logger.info("Published initial state of 'leios-stable' repository.");
-
-                if (!stablePublishResult.data) {
-                    throw new Error("Failed to publish 'leios-stable' repository: " + stablePublishResult.error);
-                }
-            }
-
-
-        } catch (error: any) {
-            throw new Error("Failed to perform initial repository publish: " + error.message);
+        const existingPublishedReposResult = await AptlyAPIServer.getClient().getApiPublish({});
+        if (!existingPublishedReposResult.data) {
+            throw new Error("Failed to fetch existing published repositories: " + existingPublishedReposResult.error.error);
         }
+        const existingPublishedRepos = existingPublishedReposResult.data;
+
+        if (!existingPublishedRepos.some(pub => pub.Storage === "s3:leios-live-repo" && pub.Distribution === "testing")) {
+            const testingPublishResult = await AptlyAPIServer.getClient().postApiPublishByPrefix({
+                path: {
+                    prefix: "s3:leios-live-repo",
+                },
+                body: {
+                    SourceKind: "local",
+                    Sources: [
+                        {
+                            Name: "leios-testing",
+                            Component: "main"
+                        }
+                    ],
+                    Distribution: "testing"
+                }
+            });
+
+            Logger.info("Pubklished initial state of 'leios-testing' repository.");
+            if (!testingPublishResult.data) {
+                throw new Error("Failed to publish 'leios-testing' repository: " + testingPublishResult.error.error);
+            }
+        }
+
+        if (!existingPublishedRepos.some(pub => pub.Storage === "s3:leios-live-repo" && pub.Distribution === "stable")) {
+            const createSnapshotResult = await AptlyAPIServer.getClient().postApiReposByNameSnapshots({
+                path: {
+                    name: "leios-stable"
+                },
+                body: {
+                    Name: `leios-stable-0000.00.0`,
+                    Description: "Initial stable snapshot. This snapshot is empty.",
+                }
+            });
+            if (!createSnapshotResult.data) {
+                throw new Error("Failed to create initial snapshot for 'leios-stable' repository: " + createSnapshotResult.error.error);
+            }
+
+            const stablePublishResult = await AptlyAPIServer.getClient().postApiPublishByPrefix({
+                path: {
+                    prefix: "s3:leios-live-repo",
+                },
+                body: {
+                    SourceKind: "snapshot",
+                    Sources: [
+                        {
+                            Name: "leios-stable-0000.00.0",
+                            Component: "main"
+                        }
+                    ],
+                    Distribution: "stable"
+                }
+            });
+
+            Logger.info("Published initial state of 'leios-stable' repository.");
+
+            if (!stablePublishResult.data) {
+                throw new Error("Failed to publish 'leios-stable' repository: " + stablePublishResult.error.error);
+            }
+        }
+
+
 
     }
 

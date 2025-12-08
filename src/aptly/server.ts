@@ -1,25 +1,28 @@
-import { client } from './api-client/client.gen';
-import * as apiClient from "./api-client"
-import { Logger } from '../utils/logger';
-import { Utils } from '../utils';
-import { AptlyUtils } from './utils';
+import fs from "fs/promises";
+import path from "path";
+import z from "zod";
+import { client } from "./api-client/client.gen";
+import * as apiClient from "./api-client";
+import { Logger } from "../utils/logger";
+import { AptlyUtils } from "./utils";
 
-export interface AptlyAPISettings {
-    aptlyRoot: string;
-    aptlyPort: number;
-    s3Settings: {
-        endpoint: string;
-        region: string;
-        bucket: string;
-        prefix?: string;
-        accessKeyId?: string;
-        secretAccessKey?: string;
-    };
-    keySettings: {
-        publicKeyPath: string;
-        privateKeyPath: string;
-    };
-}
+const AptlyAPISettingsSchema = z.object({
+    aptlyRoot: z.string().min(1),
+    aptlyPort: z.number().int().positive(),
+    s3Settings: z.object({
+        endpoint: z.string().min(1),
+        region: z.string().min(1),
+        bucket: z.string().min(1),
+        prefix: z.string().optional(),
+        accessKeyId: z.string().optional(),
+        secretAccessKey: z.string().optional(),
+    }),
+    keySettings: z.object({
+        publicKeyPath: z.string().min(1),
+        privateKeyPath: z.string().min(1),
+    }),
+});
+export type AptlyAPISettings = z.infer<typeof AptlyAPISettingsSchema>;
 
 export class AptlyAPIServer {
 
@@ -46,30 +49,36 @@ export class AptlyAPIServer {
         return this.settings.aptlyRoot + "/.keys";
     }
 
-    // public static aptlyRoot: string;
-    // public static aptlyDataDir: string;
-    // public static aptlyUploadDir: string;
-    // public static aptlyBinaryPath: string;
-    // public static aptlyConfigPath: string;
-    // public static aptlyPort: number;
+    static get baseUrl() {
+        return `http://127.0.0.1:${this.settings.aptlyPort}`;
+    }
+
+    private static async ensureDirectories() {
+        await AptlyUtils.ensureDirExists(this.settings.aptlyRoot);
+        await AptlyUtils.ensureDirExists(this.aptlyDataDir);
+        await AptlyUtils.ensureDirExists(path.dirname(this.aptlyBinaryPath));
+        await AptlyUtils.ensureDirExists(path.dirname(this.aptlyConfigPath));
+        await AptlyUtils.ensureDirExists(this.aptlyUploadDir);
+        await AptlyUtils.ensureDirExists(this.dearmoredKeysDir);
+    }
 
     static async init(settings: AptlyAPISettings) {
         if (this.isInitialized) return;
-        this.isInitialized = true;
 
-        this.settings = settings;
+        this.settings = AptlyAPISettingsSchema.parse(settings);
 
+        await this.ensureDirectories();
         await AptlyUtils.downloadAptlyBinaryIfNeeded(this.aptlyBinaryPath);
-
-        await Utils.sleep(100);
-
         await this.setupAptlyConfig();
 
-        await Utils.sleep(100);
+        this.isInitialized = true;
     }
 
     static async start() {
-        // Start Aptly in the background piping sdtout and stderr to Bun
+        if (!this.isInitialized) {
+            throw new Error("AptlyAPIServer not initialized. Call init before start.");
+        }
+
         this.aptlyProcess = Bun.spawn({
             cmd: [
                 this.aptlyBinaryPath,
@@ -80,10 +89,9 @@ export class AptlyAPIServer {
             env: {
                 PATH: process.env.PATH
             },
-            stdin: 'ignore',
-            stdout: 'pipe',
-            // stdout: 'ignore',
-            stderr: 'pipe',
+            stdin: "ignore",
+            stdout: "pipe",
+            stderr: "pipe",
             detached: false
         });
 
@@ -97,15 +105,14 @@ export class AptlyAPIServer {
             }
         });
 
-
-        await Utils.sleep(1000);
-
         if (this.aptlyProcess.exitCode !== null) {
             throw new Error("Failed to start Aptly API server. Exit code: " + this.aptlyProcess.exitCode);
         }
 
+        await AptlyUtils.waitForAptlyReady(this.baseUrl);
+
         client.setConfig({
-            baseUrl: `http://127.0.0.1:${this.settings.aptlyPort}`
+            baseUrl: this.baseUrl
         });
 
         await AptlyUtils.createDefaultRepositoriesIfNeeded();
@@ -137,10 +144,16 @@ export class AptlyAPIServer {
                 "packagePoolStorage": {}
             };
 
-            await Bun.file(this.aptlyConfigPath).write(JSON.stringify({
-                ...config,
-                ...overrideConfig
-            }));
+            await AptlyUtils.ensureDirExists(path.dirname(this.aptlyConfigPath));
+
+            await fs.writeFile(
+                this.aptlyConfigPath,
+                JSON.stringify({
+                    ...config,
+                    ...overrideConfig
+                }),
+                "utf8"
+            );
 
             Logger.info(`Aptly config successfully setup`);
         } catch (error) {
@@ -157,9 +170,10 @@ export class AptlyAPIServer {
     }
 
 
-    static async stop(type: NodeJS.Signals) {
+    static async stop(type: NodeJS.Signals = "SIGTERM") {
         if (this.aptlyProcess) {
             this.aptlyProcess.kill(type);
+            await this.aptlyProcess.exited.catch(() => null);
             Logger.info("Aptly process stopped.");
         }
     }

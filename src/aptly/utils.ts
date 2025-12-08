@@ -1,59 +1,64 @@
+import fs from "fs/promises";
+import path from "path";
 import { Logger } from "../utils/logger";
-import fs from 'fs/promises';
-import path from 'path';
-import z from "zod";
 import { AptlyAPIServer } from "./server";
 
 export class AptlyUtils {
+    private static async delay(ms: number) {
+        await new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    static async ensureDirExists(dirPath: string) {
+        await fs.mkdir(dirPath, { recursive: true });
+    }
+
+    static async removePathIfExists(targetPath: string) {
+        await fs.rm(targetPath, { recursive: true, force: true });
+    }
 
     static async downloadAptlyBinaryIfNeeded(aptlyBinaryPath: string) {
+        const fileExists = await fs.access(aptlyBinaryPath).then(() => true).catch(() => false);
+        if (fileExists) return;
+
+        const releaseResponse = await fetch("https://api.github.com/repos/aptly-dev/aptly/releases/latest");
+        if (!releaseResponse.ok) {
+            throw new Error(`GitHub release request failed with status ${releaseResponse.status}`);
+        }
+        const releaseData = await releaseResponse.json();
+
+        const arch = process.arch === "x64" ? "amd64" : process.arch;
+        const os = process.platform;
+        const asset = releaseData.assets?.find((candidate: any) => candidate.name && candidate.name.includes(`${os}_${arch}.zip`));
+        if (!asset) {
+            throw new Error("No suitable Aptly binary found for this architecture and OS.");
+        }
+
+        await this.ensureDirExists(path.dirname(aptlyBinaryPath));
+
+        const tmpArchiveDir = `/tmp/aptly-archive`;
+        const tmpZipPath = `/tmp/aptly-download.zip`;
+        const binName = asset.name.replace(".zip", "");
+
         try {
-
-            const fileExists = await fs.access(aptlyBinaryPath).then(() => true).catch(() => false);
-            if (fileExists) {
-                return;
+            const downloadResponse = await Bun.fetch(asset.browser_download_url);
+            if (!downloadResponse.ok) {
+                throw new Error(`Failed to download Aptly binary: status ${downloadResponse.status}`);
             }
 
-            const latestRelease = await fetch("https://api.github.com/repos/aptly-dev/aptly/releases/latest");
+            const archiveBuffer = await downloadResponse.arrayBuffer();
+            await Bun.write(Bun.file(tmpZipPath), archiveBuffer);
+            await Bun.$`unzip -o ${tmpZipPath} -d ${tmpArchiveDir}`.text();
 
-            const releaseData = await latestRelease.json();
-
-            const arch = process.arch === "x64" ? "amd64" : process.arch;
-
-            let os = process.platform;
-
-            const asset = releaseData.assets.find((asset: any) => asset.name.includes(`${os}_${arch}.zip`));
-
-            if (!asset) {
-                throw new Error("No suitable Aptly binary found for this architecture and OS.");
-            }
-
-            // make sure the target directory exists
-            await fs.mkdir(path.dirname(aptlyBinaryPath), { recursive: true });
-
-            const response = await Bun.fetch(asset.browser_download_url);
-
-            const binName = asset.name.replace('.zip', '');
-
-            if (!response.ok) {
-                throw new Error("Failed to download Aptly binary.");
-            }
-
-            const file = Bun.file(`/tmp/aptly-download.zip`);
-            const archiveBuffer = await response.arrayBuffer();
-            await Bun.write(file, archiveBuffer);
-            await Bun.$`unzip -o /tmp/aptly-download.zip -d /tmp/aptly-archive`.text();
-
-            await fs.copyFile(`/tmp/aptly-archive/${binName}/aptly`, aptlyBinaryPath);
+            await fs.copyFile(`${tmpArchiveDir}/${binName}/aptly`, aptlyBinaryPath);
             await fs.chmod(aptlyBinaryPath, 0o755);
 
-            await fs.rm(`/tmp/aptly-archive`, { recursive: true });
-            await fs.rm(`/tmp/aptly-download.zip`, { recursive: true });
-
             Logger.info(`Aptly binary downloaded to ${aptlyBinaryPath}`);
-
         } catch (error) {
-            throw new Error("Failed to fetch latest Aptly release: " + error);
+            await this.removePathIfExists(aptlyBinaryPath);
+            throw new Error(`Failed to fetch latest Aptly release: ${error}`);
+        } finally {
+            await this.removePathIfExists(tmpArchiveDir);
+            await this.removePathIfExists(tmpZipPath);
         }
     }
 
@@ -63,7 +68,7 @@ export class AptlyUtils {
             throw new Error(`GPG key file not found at ${sourcePath}`);
         }
 
-        await fs.mkdir(path.dirname(outputPath), { recursive: true });
+        await this.ensureDirExists(path.dirname(outputPath));
 
         const buffer = await fs.readFile(sourcePath);
         const header = buffer.slice(0, 64).toString("utf8");
@@ -134,63 +139,58 @@ export class AptlyUtils {
     }
 
     static async createDefaultRepositoriesIfNeeded() {
+        const existReposResponse = await AptlyAPIServer.getClient().getApiRepos({});
+        if (!existReposResponse.data) {
+            throw new Error("Failed to fetch existing repositories: " + existReposResponse.error);
+        }
+        const existingRepos = existReposResponse.data;
 
-        try {
-
-            const existReposResponse = (await AptlyAPIServer.getClient().getApiRepos({}));
-
-            if (!existReposResponse.data) {
-                throw new Error("Failed to fetch existing repositories: " + existReposResponse.error);
-            }
-            const existingRepos = existReposResponse.data;
-
-            if (!existingRepos.some(repo => repo.Name === "leios-stable")) {
-                await AptlyAPIServer.getClient().postApiRepos({
-                    body: {
-                        Name: "leios-stable",
-                        DefaultComponent: "main",
-                        DefaultDistribution: "stable"
-                    }
-                });
-
-                Logger.info("Repository 'leios-stable' created.");
-            }
-
-            if (!existingRepos.some(repo => repo.Name === "leios-testing")) {
-                await AptlyAPIServer.getClient().postApiRepos({
-                    body: {
-                        Name: "leios-testing",
-                        DefaultComponent: "main",
-                        DefaultDistribution: "testing"
-                    }
-                });
-
-                Logger.info("Repository 'leios-testing' created.");
-            }
-
-            // the archive repo is not published by default, its just to hold every package version in history
-            if (!existingRepos.some(repo => repo.Name === "leios-archive")) {
-                await AptlyAPIServer.getClient().postApiRepos({
-                    body: {
-                        Name: "leios-archive",
-                        DefaultComponent: "main",
-                        DefaultDistribution: "archive"
-                    }
-                });
-
-                Logger.info("Repository 'leios-archive' created.");
-            }
-
-        } catch (error) {
-            throw new Error("Failed to create default repositories: " + error);
+        if (!existingRepos.some(repo => repo.Name === "leios-stable")) {
+            await AptlyAPIServer.getClient().postApiRepos({
+                body: {
+                    Name: "leios-stable",
+                    DefaultComponent: "main",
+                    DefaultDistribution: "stable"
+                }
+            });
+            Logger.info("Repository 'leios-stable' created.");
         }
 
+        if (!existingRepos.some(repo => repo.Name === "leios-testing")) {
+            await AptlyAPIServer.getClient().postApiRepos({
+                body: {
+                    Name: "leios-testing",
+                    DefaultComponent: "main",
+                    DefaultDistribution: "testing"
+                }
+            });
+            Logger.info("Repository 'leios-testing' created.");
+        }
+
+        // the archive repo is not published by default, its just to hold every package version in history
+        if (!existingRepos.some(repo => repo.Name === "leios-archive")) {
+            await AptlyAPIServer.getClient().postApiRepos({
+                body: {
+                    Name: "leios-archive",
+                    DefaultComponent: "main",
+                    DefaultDistribution: "archive"
+                }
+            });
+            Logger.info("Repository 'leios-archive' created.");
+        }
     }
 
     static async initialRepoPublishIfNeeded() {
+        await this.ensureDirExists(AptlyAPIServer.dearmoredKeysDir);
 
-        const publicKeyringPath = await this.ensureBinaryGpgKeyring(AptlyAPIServer.settings.keySettings.publicKeyPath, path.join(AptlyAPIServer.dearmoredKeysDir, "public-key.dearmored.gpg"));
-        const secretKeyringPath = await this.ensureBinaryGpgKeyring(AptlyAPIServer.settings.keySettings.privateKeyPath, path.join(AptlyAPIServer.dearmoredKeysDir, "private-key.dearmored.gpg"));
+        const publicKeyringPath = await this.ensureBinaryGpgKeyring(
+            AptlyAPIServer.settings.keySettings.publicKeyPath,
+            path.join(AptlyAPIServer.dearmoredKeysDir, "public-key.dearmored.gpg")
+        );
+        const secretKeyringPath = await this.ensureBinaryGpgKeyring(
+            AptlyAPIServer.settings.keySettings.privateKeyPath,
+            path.join(AptlyAPIServer.dearmoredKeysDir, "private-key.dearmored.gpg")
+        );
 
         const signingConfig = {
             Keyring: publicKeyringPath,
@@ -198,7 +198,6 @@ export class AptlyUtils {
         } as const;
 
         const publishPrefix = "s3:leios-live-repo:";
-
 
         const existingPublishedReposResult = await AptlyAPIServer.getClient().getApiPublish({});
         if (!existingPublishedReposResult.data) {
@@ -240,7 +239,7 @@ export class AptlyUtils {
                     name: "leios-stable"
                 },
                 body: {
-                    Name: `leios-stable-0000.00.0`,
+                    Name: "leios-stable-0000.00.0",
                     Description: "Initial stable snapshot. This snapshot is empty.",
                 }
             });
@@ -280,9 +279,6 @@ export class AptlyUtils {
                 throw new Error("Failed to publish 'leios-stable' repository: " + stablePublishResult.error.error);
             }
         }
-
-
-
     }
 
     static extractVersionAndPatchSuffix(fullVersion: string) {
@@ -292,15 +288,12 @@ export class AptlyUtils {
                 version: leiosSuffixMatch[1],
                 leios_patch: parseInt(leiosSuffixMatch[2])
             };
-        } else {
-            return {
-                version: fullVersion,
-                leios_patch: undefined
-            };
         }
+        return {
+            version: fullVersion,
+            leios_patch: undefined
+        };
     }
-
-
 
     static buildVersionWithLeiOSSuffix(version: string, leios_patch?: string | null) {
         if (leios_patch) {
@@ -315,20 +308,29 @@ export class AptlyUtils {
     static getPackageIdentifier(packageName: string, fullPackageVersion: string, architecture: string): string;
     static getPackageIdentifier(packageName: string, packageVersion: string, leios_patch: string | null | undefined, architecture: string): string;
     static getPackageIdentifier(packageName: string, versionOrFullVersion: string, leios_patchOrArch: string | null | undefined, architectureOpt?: string) {
-
-        let fullPackageVersion: string;
-
-        if (architectureOpt) {
-            // Called with (packageName, packageVersion, leios_patch, architecture)
-            fullPackageVersion = this.buildVersionWithLeiOSSuffix(versionOrFullVersion, leios_patchOrArch);
-        } else {
-            // Called with (packageName, fullPackageVersion, architecture)
-            fullPackageVersion = versionOrFullVersion;
-        }
+        const fullPackageVersion = architectureOpt
+            ? this.buildVersionWithLeiOSSuffix(versionOrFullVersion, leios_patchOrArch)
+            : versionOrFullVersion;
 
         const architecture = architectureOpt ? architectureOpt : leios_patchOrArch!;
-
         return `${packageName}_${fullPackageVersion}_${architecture}`;
     }
 
+    static async waitForAptlyReady(baseUrl: string, timeoutMs = 10_000, pollMs = 300) {
+        const deadline = Date.now() + timeoutMs;
+        let lastError = "";
+
+        while (Date.now() < deadline) {
+            try {
+                const response = await fetch(`${baseUrl}/api/version`);
+                if (response.ok) return;
+                lastError = `status ${response.status}`;
+            } catch (error: any) {
+                lastError = error?.message || String(error);
+            }
+            await this.delay(pollMs);
+        }
+
+        throw new Error(`Aptly API not reachable after ${timeoutMs}ms: ${lastError}`);
+    }
 }

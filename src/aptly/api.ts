@@ -1,6 +1,6 @@
+import fs from "fs/promises";
+import path from "path";
 import { AptlyAPIServer } from "./server";
-import fs from 'fs';
-import { dirname } from 'path';
 import { AptlyUtils } from "./utils";
 import z from "zod";
 
@@ -28,7 +28,7 @@ export namespace AptlyAPI.Packages {
 
     export async function getRefInRepo(repoName: AptlyAPI.Utils.Repos, packageName: string, packageVersion?: string, leios_patch?: string, packageArch?: AptlyAPI.Utils.Architectures) {
         const fullPackageVersion = packageVersion ? AptlyUtils.buildVersionWithLeiOSSuffix(packageVersion, leios_patch) : undefined;
-        return (await AptlyAPIServer.getClient().getApiReposByNamePackages({
+        const refsResult = await AptlyAPIServer.getClient().getApiReposByNamePackages({
             path: {
                 name: repoName
             },
@@ -38,12 +38,18 @@ export namespace AptlyAPI.Packages {
                 format: "",
                 maximumVersion: ""
             }
-        })).data as any as string[] || [];
+        });
+
+        if (!refsResult.data) {
+            throw new Error("Failed to query package references: " + refsResult.error);
+        }
+
+        return refsResult.data as any as string[] || [];
     }
 
     export async function getInRepo(repoName: AptlyAPI.Utils.Repos, packageName: string, packageVersion?: string, leios_patch?: string, packageArch?: AptlyAPI.Utils.Architectures) {
         const fullPackageVersion = packageVersion ? AptlyUtils.buildVersionWithLeiOSSuffix(packageVersion, leios_patch) : undefined;
-        const reuslt = (await AptlyAPIServer.getClient().getApiReposByNamePackages({
+        const result = await AptlyAPIServer.getClient().getApiReposByNamePackages({
             path: {
                 name: repoName
             },
@@ -53,11 +59,11 @@ export namespace AptlyAPI.Packages {
                 format: "details",
                 maximumVersion: ""
             }
-        }));
-        if (reuslt.error) {
-            throw new Error("Failed to get package: " + reuslt.error);
+        });
+        if (!result.data) {
+            throw new Error("Failed to get package: " + result.error);
         }
-        const resultData = reuslt.data as any;
+        const resultData = result.data as any;
 
         if (!Array.isArray(resultData)) {
             throw new Error("Invalid response from Aptly server.");
@@ -71,7 +77,7 @@ export namespace AptlyAPI.Packages {
                 throw new Error("Invalid package data from Aptly server.");
             }
 
-            if (pkg.Package !== packageName || 
+            if (pkg.Package !== packageName ||
                 (fullPackageVersion && pkg.Version !== fullPackageVersion) ||
                 (packageArch && pkg.Architecture !== packageArch)) {
                 throw new Error("Package data mismatch from Aptly server.");
@@ -164,50 +170,54 @@ export namespace AptlyAPI.Packages {
         const uploadSubDir = Bun.randomUUIDv7();
         const packageIdentifier = AptlyUtils.getPackageIdentifier(packageData.name, fullPackageVersion, packageData.architecture);
         const fileName = `${packageIdentifier}.deb`;
-        const fullFilePath = AptlyAPIServer.aptlyUploadDir + "/" + uploadSubDir + "/" + fileName;
+        const uploadDir = path.join(AptlyAPIServer.aptlyUploadDir, uploadSubDir);
+        const fullFilePath = path.join(uploadDir, fileName);
 
-        await Bun.write(fullFilePath, await file.arrayBuffer());
+        let shouldCleanup = true;
 
-        const dpkgChackResult = await Bun.$`dpkg --info ${fullFilePath}`.text();
+        await AptlyUtils.ensureDirExists(uploadDir);
 
-        if (!dpkgChackResult.includes(`Version: ${fullPackageVersion}`)) {
-            fs.rmSync(dirname(fullFilePath), { recursive: true, force: true });
-            throw new Error("Uploaded package version mismatch.");
-        }
+        try {
+            await Bun.write(fullFilePath, await file.arrayBuffer());
 
-        if (!dpkgChackResult.includes(`Architecture: ${packageData.architecture}`)) {
-            fs.rmSync(dirname(fullFilePath), { recursive: true, force: true });
-            throw new Error("Uploaded package architecture mismatch.");
-        }
+            const dpkgCheckResult = await Bun.$`dpkg --info ${fullFilePath}`.text();
 
-        if (!dpkgChackResult.includes(`Package: ${packageData.name}`)) {
-            fs.rmSync(dirname(fullFilePath), { recursive: true, force: true });
-            throw new Error("Uploaded package name mismatch.");
-        }
+            const validations: Array<{ description: string; ok: boolean; }> = [
+                { description: "Uploaded package version mismatch.", ok: dpkgCheckResult.includes(`Version: ${fullPackageVersion}`) },
+                { description: "Uploaded package architecture mismatch.", ok: dpkgCheckResult.includes(`Architecture: ${packageData.architecture}`) },
+                { description: "Uploaded package name mismatch.", ok: dpkgCheckResult.includes(`Package: ${packageData.name}`) },
+                {
+                    description: "Uploaded package maintainer mismatch.",
+                    ok: skipMaintainerCheck || dpkgCheckResult.includes(`Maintainer: ${packageData.maintainer_name} <${packageData.maintainer_email}>`)
+                }
+            ];
 
-        if (!skipMaintainerCheck && !dpkgChackResult.includes(`Maintainer: ${packageData.maintainer_name} <${packageData.maintainer_email}>`)) {
-            fs.rmSync(dirname(fullFilePath), { recursive: true, force: true });
-            throw new Error("Uploaded package maintainer mismatch.");
-        }
-
-        const addingResult = await AptlyAPIServer.getClient().postApiReposByNameFileByDirByFile({
-            path: {
-                name: repoName,
-                dir: uploadSubDir,
-                file: fileName
+            const failedValidation = validations.find(v => !v.ok);
+            if (failedValidation) {
+                throw new Error(failedValidation.description);
             }
-        });
 
-        const parsedResult = (addingResult.data as any as { "Report": { "Added": string[] } })["Report"]["Added"][0] || "error";
+            const addingResult = await AptlyAPIServer.getClient().postApiReposByNameFileByDirByFile({
+                path: {
+                    name: repoName,
+                    dir: uploadSubDir,
+                    file: fileName
+                }
+            });
 
-        if (addingResult.error || parsedResult !== `${packageIdentifier} added`) {
+            const parsedResult = (addingResult.data as any as { "Report": { "Added": string[] } })?.["Report"]?.["Added"]?.[0] || "";
 
-            fs.rmSync(dirname(fullFilePath), { recursive: true, force: true });
+            if (addingResult.error || !parsedResult.includes("added")) {
+                throw new Error("Failed to add package to repository: " + addingResult.error);
+            }
 
-            throw new Error("Failed to add package to repository: " + addingResult.error);
+            shouldCleanup = false;
+            return true;
+        } finally {
+            if (shouldCleanup) {
+                await fs.rm(uploadDir, { recursive: true, force: true });
+            }
         }
-
-        return true;
     }
 
     export async function copyIntoRepo(targetRepo: "leios-stable" | "leios-testing", packageName: string, packageVersion: string, leios_patch: string | undefined, packageArch: AptlyAPI.Utils.Architectures) {

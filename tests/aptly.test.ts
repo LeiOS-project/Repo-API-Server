@@ -5,7 +5,19 @@ import { AptlyAPI } from "../src/aptly/api";
 beforeAll(async() => {
     await AptlyAPIServer.init({
         aptlyRoot: "./data/aptly",
-        aptlyPort: 8080
+        aptlyPort: 8080,
+        s3Settings: {
+            endpoint: "http://localhost:9000",
+            region: "us-east-1",
+            bucket: "leios-test-bucket",
+            prefix: "test-prefix",
+            accessKeyId: "test-access-key",
+            secretAccessKey: "test-secret-key"
+        },
+        keySettings: {
+            publicKeyPath: "./data/keys/public-key.gpg",
+            privateKeyPath: "./data/keys/private-key.gpg",
+        }
     });
     await AptlyAPIServer.start();
 });

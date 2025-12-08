@@ -94,7 +94,22 @@ beforeAll(async () => {
     }
     mkdirSync(APTLY_ROOT, { recursive: true });
 
-    await AptlyAPIServer.init({ aptlyRoot: APTLY_ROOT, aptlyPort: APTLY_PORT });
+    await AptlyAPIServer.init({
+        aptlyRoot: APTLY_ROOT,
+        aptlyPort: APTLY_PORT,
+        s3Settings: {
+            endpoint: "http://localhost:9000",
+            region: "us-east-1",
+            bucket: "leios-test-bucket",
+            prefix: "test-prefix",
+            accessKeyId: "test-access-key",
+            secretAccessKey: "test-secret-key"
+        },
+        keySettings: {
+            publicKeyPath: "./data/keys/public-key.gpg",
+            privateKeyPath: "./data/keys/private-key.gpg",
+        }
+    });
     await AptlyAPIServer.start();
 
     const sqlite = new Database(TEST_DB_PATH);

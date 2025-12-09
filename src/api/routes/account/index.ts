@@ -133,30 +133,6 @@ router.put('/password',
     },
 );
 
-router.post('/logout',
-
-    APIRouteSpec.authenticated({
-        summary: "Logout from current session",
-        description: "Logs out the authenticated user from the current session.",
-        tags: ['Account'],
-
-        responses: APIResponseSpec.describeBasic(
-            APIResponseSpec.successNoData("Logged out successfully"),
-            APIResponseSpec.unauthorized("Your Auth Context is not a session")
-        )
-    }),
-
-    async (c) => {
-        // @ts-ignore
-        const authContext = c.get("authContext") as AuthHandler.SessionAuthContext;
-
-        DB.instance().delete(DB.Schema.sessions).where(
-            eq(DB.Schema.sessions.token, authContext.token)
-        ).run();
-
-        return APIResponse.successNoData(c, "Logged out successfully");
-    },
-);
 
 router.delete('/',
 

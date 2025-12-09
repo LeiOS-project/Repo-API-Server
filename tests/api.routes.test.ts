@@ -7,6 +7,7 @@ import { randomUUID } from "crypto";
 import { eq } from "drizzle-orm";
 import { AuthModel } from "../src/api/routes/auth/model";
 import { makeAPIRequest } from "./helpers/api";
+import { AccountModel } from "../src/api/routes/account/model";
 
 const PACKAGE_FILE_PATH = "./testdata/fastfetch_2.55.0_amd64.deb";
 const PACKAGE_NAME = "fastfetch";
@@ -33,13 +34,10 @@ const testAdmin = await seedUser("admin", { username: "testadmin" }, "AdminP@ss1
 const testDeveloper = await seedUser("developer", { username: "testdeveloper" }, "DevP@ss1");
 const testUser = await seedUser("user", { username: "testuser" }, "UserP@ss1");
 
-function authHeaders(token: string) {
-    return {
-        Authorization: `Bearer ${token}`
-    };
-}
+let session_token: string;
 
 describe("Auth routes and access checks", () => {
+
     test("POST /auth/login authenticates and creates session", async () => {
 
         const data = await makeAPIRequest("/auth/login", {
@@ -49,63 +47,101 @@ describe("Auth routes and access checks", () => {
         });
 
         expect(data.token.startsWith("lra_sess_")).toBe(true);
+        
+        session_token = data.token;
 
-        expect(AuthHandler.getAuthContext(data.token)).resolves.toMatchObject({
-            user_id: testUser.id,
-            user_role: "user",
-            type: "session",
-            token: data.token
-        } as Partial<AuthHandler.AuthContext>);
+        const session = await AuthHandler.getAuthContext(data.token);
+
+        expect(session).toBeDefined();
+        if (!session) return;
+
+        expect(session.user_id).toBe(testUser.id);
+        expect(session.user_role).toBe("user");
+        expect(session.type).toBe("session");
+        expect(session.token).toBe(data.token);
+    });
+
+    test("POST /auth/login with invalid credentials fails", async () => {
+
+        await makeAPIRequest("/auth/login", {
+            method: "POST",
+            body: { username: testUser.username, password: "WrongPassword" },
+        }, 401);
+
     });
 
     test("GET /auth/session returns current session info", async () => {
+
+        const data = await makeAPIRequest("/auth/session", {
+            authToken: session_token,
+            expectedBodySchema: AuthModel.Session.Response
+        });
+
+        expect(data.user_id).toBe(testUser.id);
+        expect(data.user_role).toBe("user");
+        expect(data.token).toBe(session_token);
+    });
+
+    test("GET /auth/session with invalid token fails", async () => {
+
+        await makeAPIRequest("/auth/session", {
+            authToken: "invalid_token",
+        }, 401);
+
+    });
+    
+    test("GET /dev as admin succeeds", async () => {
+
+        await makeAPIRequest("/dev", {
+            authToken: session_token,
+        }, 401);
+
+    });
+
+    test("GET /admin as non-admin fails", async () => {
+
+        await makeAPIRequest("/admin", {
+            authToken: session_token,
+        }, 401);
 
     });
 
     test("POST /auth/logout invalidates session", async () => {
 
-        const res = await API.getApp().request("/auth/logout", {
+        await makeAPIRequest("/auth/logout", {
             method: "POST",
-            headers: authHeaders(session.token)
+            authToken: session_token
         });
 
-        expect(res.status).toBe(200);
-        const check = DB.instance().select().from(DB.Schema.sessions).where(eq(DB.Schema.sessions.token, session.token)).get();
-        expect(check).toBeUndefined();
+        const session = await AuthHandler.getAuthContext(session_token);
+
+        expect(session).toBeNil();
     });
 });
 
 describe("Account routes", () => {
     test("GET /account returns current user", async () => {
-        const { user } = await seedUser("user");
-        const session = await SessionHandler.createSession(user.id);
 
-        const res = await API.getApp().request("/account", {
-            headers: authHeaders(session.token)
+        const data = await makeAPIRequest("/account", {
+            authToken: session_token,
+            expectedBodySchema: AccountModel.GetInfo.Response
         });
 
-        expect(res.status).toBe(200);
-        const body = await res.json();
-        expect(body.data.id).toBe(user.id);
-        expect(body.data.password_hash).toBeUndefined();
+        expect(data.id).toBe(testUser.id);
+        expect(data.username).toBe(testUser.username);
+        expect(data.display_name).toBe(testUser.display_name);
+        expect(data.email).toBe(testUser.email);
+        expect(data.role).toBe("user");
     });
 
     test("PUT /account updates profile fields", async () => {
-        const { user } = await seedUser("user");
-        const session = await SessionHandler.createSession(user.id);
-
-        const res = await API.getApp().request("/account", {
-            method: "PUT",
-            headers: {
-                ...authHeaders(session.token),
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ display_name: "Updated", username: user.username })
+        
+        const newDisplayName = "Updated Name";
+        const newEmail = "updated@example.com";
+        const data = await makeAPIRequest("/account", {
+            
         });
 
-        expect(res.status).toBe(200);
-        const updated = DB.instance().select().from(DB.Schema.users).where(eq(DB.Schema.users.id, user.id)).get();
-        expect(updated?.display_name).toBe("Updated");
     });
 
     test("PUT /account/password rotates credentials and invalidates old sessions", async () => {

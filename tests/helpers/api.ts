@@ -7,15 +7,19 @@ export async function makeAPIRequest<ReturnBody>(
     path: string,
     opts: {
         method?: "GET" | "POST" | "PUT" | "DELETE",
+        authToken?: string,
         body?: Record<string, any>,
         expectedBodySchema?: ZodType<ReturnBody>,
         additionalOptions?: RequestInit
     } = {},
-    shouldFail = false
+    expectedCode?: number
 ) {
     const options: RequestInit = {
         method: opts.method ?? "GET",
-        headers: opts.body ? { "Content-Type": "application/json" } : {},
+        headers: {
+            ...(opts.body ? { "Content-Type": "application/json" } : {}),
+            ...(opts.authToken ? { "Authorization": `Bearer ${opts.authToken}` } : {})
+        },
         ...opts.additionalOptions,
         body: opts.body ? JSON.stringify(opts.body) : undefined
     };
@@ -23,16 +27,16 @@ export async function makeAPIRequest<ReturnBody>(
     try {
         const res = await API.getApp().request(path, options);
 
-        if (!shouldFail) {
+        if (!expectedCode) {
             expect(res.status).toBeOneOf([200, 201, 202, 204]);
         } else {
-            expect(res.status).not.toBeOneOf([200, 201, 202, 204]);
+            expect(res.status).toBe(expectedCode);
         }
 
         const resBody = await res.json();
 
         if (opts.expectedBodySchema) {
-            const parseResult = opts.expectedBodySchema.safeParse(resBody);
+            const parseResult = opts.expectedBodySchema.safeParse(resBody.data || {});
             if (parseResult.success) {
                 expect(parseResult.success).toBe(true);
                 return parseResult.data;
@@ -46,13 +50,12 @@ export async function makeAPIRequest<ReturnBody>(
         return resBody as ReturnBody;
         
     } catch (err) {
-        if (!shouldFail) {
-            // let the test fail if an error occurs
-            if (!err) {
-                throw new Error("Unknown error occurred during API request");
-            }
-            expect(err).toBeUndefined();
+        // let the test fail if an error occurs
+        if (!err) {
+            throw new Error("Unknown error occurred during API request");
         }
+        expect(err).toBeUndefined();
+
         return null as any as ReturnBody;
     }
 }

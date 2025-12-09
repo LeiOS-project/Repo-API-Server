@@ -46,7 +46,6 @@ export class PkgReleasesService {
 
         try {
             const result = await AptlyAPI.Packages.uploadAndVerify(
-                "leios-archive",
                 {
                     name: packageData.name,
                     version,

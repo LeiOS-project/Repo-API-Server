@@ -14,6 +14,30 @@ export namespace AptlyAPI.Utils {
 
 }
 
+export namespace AptlyAPI.Response {
+
+    export function success<TReturn>(data: TReturn): Success<TReturn> {
+        return { data, error: null };
+    }
+
+    export function err<T extends string>(message: T): Error<T> {
+        return { data: null, error: message };
+    }
+
+    export type Success<T> = {
+        data: T;
+        error: null;
+    };
+
+    export type Error<T extends string> = {
+        data: null;
+        error: T;
+    };
+
+    // export type 
+
+}
+
 export namespace AptlyAPI.DB {
 
     export async function cleanup() {
@@ -148,7 +172,6 @@ export namespace AptlyAPI.Packages {
     }
 
     export async function uploadAndVerify(
-        repoName: AptlyAPI.Utils.Repos,
         packageData: {
             name: string;
             maintainer_name: string;
@@ -162,7 +185,7 @@ export namespace AptlyAPI.Packages {
     ) {
         const fullPackageVersion = AptlyUtils.buildVersionWithLeiOSSuffix(packageData.version, packageData.leios_patch);
 
-        const existsPackage = await existsInRepo(repoName, packageData.name, packageData.version, packageData.leios_patch, packageData.architecture);
+        const existsPackage = await existsInRepo("leios-archive", packageData.name, packageData.version, packageData.leios_patch, packageData.architecture);
         if (existsPackage) {
             throw new Error("Package already exists in repository.");
         }
@@ -199,7 +222,7 @@ export namespace AptlyAPI.Packages {
 
             const addingResult = await AptlyAPIServer.getClient().postApiReposByNameFileByDirByFile({
                 path: {
-                    name: repoName,
+                    name: "leios-archive",
                     dir: uploadSubDir,
                     file: fileName
                 }
@@ -272,7 +295,7 @@ export namespace AptlyAPI.Publishing {
         const result = await AptlyAPIServer.getClient().postApiPublishByPrefixByDistributionUpdate({
             path: {
                 prefix: "s3:leios-live-repo",
-                distribution: "leios-testing"
+                distribution: "testing"
             },
             body: {}
         });

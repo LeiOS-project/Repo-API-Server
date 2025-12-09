@@ -14,16 +14,30 @@ export async function makeAPIRequest<ReturnBody = null>(
     } = {},
     expectedCode?: number
 ) {
-    const options: RequestInit = {
-        method: opts.method ?? "GET",
-        headers: {
-            ...(opts.body ? { "Content-Type": "application/json" } : {}),
-            ...(opts.authToken ? { "Authorization": `Bearer ${opts.authToken}` } : {})
-        },
-        ...opts.additionalOptions,
-        body: opts.body ? JSON.stringify(opts.body) : undefined
+    const baseHeaders: HeadersInit = {
+        ...(opts.body ? { "Content-Type": "application/json" } : {}),
+        ...(opts.authToken ? { "Authorization": `Bearer ${opts.authToken}` } : {})
     };
 
+    if (opts.additionalOptions?.headers) {
+        const extraHeaders = opts.additionalOptions.headers as HeadersInit;
+        if (extraHeaders instanceof Headers) {
+            extraHeaders.forEach((value, key) => {
+                (baseHeaders as Record<string, string>)[key] = value;
+            });
+        } else {
+            Object.assign(baseHeaders as Record<string, string>, extraHeaders as Record<string, string>);
+        }
+    }
+
+    const resolvedBody = opts.additionalOptions?.body ?? (opts.body ? JSON.stringify(opts.body) : undefined);
+
+    const options: RequestInit = {
+        method: opts.method ?? opts.additionalOptions?.method ?? "GET",
+        ...opts.additionalOptions,
+        headers: baseHeaders,
+        body: resolvedBody
+    };
 
     const res = await API.getApp().request(path, options);
 
@@ -33,9 +47,10 @@ export async function makeAPIRequest<ReturnBody = null>(
         expect(res.status).toBe(expectedCode);
     }
 
-    if (opts.expectedBodySchema) {
+    const contentType = res.headers.get("content-type") || "";
+    const resBody = contentType.includes("application/json") ? await res.json() : null;
 
-        const resBody = await res.json();
+    if (opts.expectedBodySchema && resBody) {
 
         const parseResult = opts.expectedBodySchema.safeParse(resBody.data || {});
         if (parseResult.success) {
@@ -46,6 +61,10 @@ export async function makeAPIRequest<ReturnBody = null>(
             //@ts-ignore
             expect(parseResult.success).toBe(true);
         }
+    }
+
+    if (resBody && typeof resBody === "object" && "data" in resBody) {
+        return (resBody as any).data as ReturnBody;
     }
 
     return null as any as ReturnBody;

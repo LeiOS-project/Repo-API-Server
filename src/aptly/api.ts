@@ -254,8 +254,6 @@ export namespace AptlyAPI.Packages {
 
     export async function copyIntoRepo(targetRepo: "leios-stable" | "leios-testing", packageName: string, packageVersion: string, leios_patch: string | undefined, packageArch: AptlyAPI.Utils.Architectures) {
         
-        const 
-        
         const result = await AptlyAPIServer.getClient().postApiReposByNameCopyBySrcByFile({
             path: {
                 name: targetRepo,

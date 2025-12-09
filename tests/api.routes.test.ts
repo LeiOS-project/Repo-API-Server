@@ -177,29 +177,38 @@ describe("Account routes", async () => {
     });
 
     test("PUT /account/password rotates credentials and invalidates old sessions", async () => {
-        const oldPassword = "OldP@ssw0rd";
-        const { user } = await seedUser("user", {}, oldPassword);
-        const session = await SessionHandler.createSession(user.id);
 
-        const res = await API.getApp().request("/account/password", {
+        const oldPassword = testUser.password;
+        const newPassword = "NewP@ssw0rd1";
+
+        await makeAPIRequest("/account/password", {
             method: "PUT",
-            headers: {
-                ...authHeaders(session.token),
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ current_password: oldPassword, new_password: "NewP@ssw0rd1" })
+            authToken: session_token,
+            body: {
+                current_password: oldPassword,
+                new_password: newPassword
+            }
         });
 
-        expect(res.status).toBe(200);
-        const stillThere = DB.instance().select().from(DB.Schema.sessions).where(eq(DB.Schema.sessions.token, session.token)).get();
-        expect(stillThere).toBeUndefined();
+        // Old session should be invalidated
+        await makeAPIRequest("/account", {
+            authToken: session_token,
+        }, 401);
 
-        const loginRes = await API.getApp().request("/auth/login", {
+        // Login with old password should fail
+        await makeAPIRequest("/auth/login", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username: user.username, password: "NewP@ssw0rd1" })
+            body: { username: testUser.username, password: oldPassword },
+        }, 401);
+
+        // Login with new password should succeed
+        const data = await makeAPIRequest("/auth/login", {
+            method: "POST",
+            body: { username: testUser.username, password: newPassword },
+            expectedBodySchema: AuthModel.Login.Response
         });
-        expect(loginRes.status).toBe(200);
+
+        expect(data.token.startsWith("lra_sess_")).toBe(true);
     });
 
     test("DELETE /account prevents removal while packages exist", async () => {

@@ -3,7 +3,6 @@ import { AptlyAPIServer } from "./aptly/server";
 import { DB } from "./db";
 import { ConfigHandler } from "./utils/config";
 import { Logger } from "./utils/logger";
-import { registerOsReleaseTasks } from "./tasks/osRelease";
 import { TaskScheduler } from "./tasks";
 
 export class Main {
@@ -24,9 +23,8 @@ export class Main {
             config.LRA_DB_PATH ?? "./data/db.sqlite"
         );
 
-        registerOsReleaseTasks();
-        // Pick up any tasks queued before restart
-        void TaskScheduler.processQueue();
+        // start task scheduler
+        await TaskScheduler.processQueue();
 
         await AptlyAPIServer.init({
             aptlyRoot: config.LRA_APTLY_ROOT ?? "./data/aptly",
@@ -61,6 +59,8 @@ export class Main {
             Logger.log(`Received ${type}, shutting down...`);
             await API.stop();
             await AptlyAPIServer.stop(type);
+            await TaskScheduler.stopProcessing();
+            Logger.log("Shutdown complete, exiting.");
             process.exit(code);
         } catch {
             Logger.critical("Error during shutdown, forcing exit");

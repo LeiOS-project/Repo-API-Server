@@ -21,6 +21,7 @@
         "typescript": "^5.9.3"
     },
     "dependencies": {
+        "@cleverjs/utils": "^1.1.9",
         "@hono/standard-validator": "^0.2.0",
         "@libsql/client": "^0.15.15",
         "@scalar/hono-api-reference": "^0.9.27",

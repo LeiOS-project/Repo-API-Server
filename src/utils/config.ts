@@ -110,6 +110,8 @@ export class ConfigHandler {
         .add("LRA_API_HOST", false)
         .add("LRA_API_PORT", false)
 
+        .add("LRA_LOG_DIR", false)
+
         .add("LRA_DB_PATH", false)
 
         .add("LRA_APTLY_ROOT", false)

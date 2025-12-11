@@ -1,3 +1,4 @@
+import type { TaskHandler } from '@cleverjs/utils';
 import { sql } from 'drizzle-orm';
 import {
     sqliteTable,
@@ -98,18 +99,33 @@ export const stablePromotionRequests = sqliteTable('stable_promotion_requests', 
  */
 export const scheduled_tasks = sqliteTable('scheduled_tasks', {
     id: int().primaryKey({ autoIncrement: true }),
-    job_type: text().notNull(),
-    trigger: text({ enum: ["manual"] }).notNull(),
     function: text().notNull(),
-    payload: text({ mode: 'json' }).notNull(),
-    status: text({ enum: ["queued", "running", "failed", "completed"] }).notNull().default('queued'),
-    error: text(),
-    result: text({ mode: 'json' }),
-    created_at: int(),
-    updated_at: int(),
-    started_at: int(),
-    completed_at: int(),
+    created_by_user_id: int().notNull().references(() => users.id),
+    args: text({ mode: 'json' }).$type<Record<string, any>>().notNull(),
+    autoDelete: int({ mode: 'boolean' }).notNull().default(sql`0`),
+    storeLogs: int({ mode: 'boolean' }).notNull().default(sql`0`),
+    status: text({ enum: ["pending", "running", "paused", "failed", "completed"] }).notNull().default('pending'),
+    created_at: int().notNull(),
+    finished_at: int(),
+    result: text({ mode: 'json' }).$type<Record<string, any>>(),
+    message: text(),
 });
+
+/**
+ * @deprecated Use DB.Models.scheduled_tasks_paused_state instead
+ */
+export const scheduled_tasks_paused_state = sqliteTable('scheduled_tasks_paused_state', {
+    task_id: int().primaryKey().references(() => scheduled_tasks.id),
+    next_step_to_execute: int().notNull(),
+    data: text({ mode: 'json' }).$type<TaskHandler.TempPausedTaskState["data"]>().notNull(),
+});
+
+export const tmp_data = sqliteTable('tmp_data', {
+    key: text().primaryKey(),
+    data: text({ mode: 'json' }).$type<Record<string, any>>().notNull(),
+    expires_at: int().notNull()
+});
+
 
 /**
  * @deprecated Use DB.Models.os_releases instead

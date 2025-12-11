@@ -93,5 +93,15 @@ router.post('/:requestID/approve',
     async (c) => {
         // @ts-ignore
         const request = c.get("stablePromotionRequest") as DB.Models.StablePromotionRequest;
+
+        await DB.instance().update(DB.Schema.stablePromotionRequests).set({
+            status: "approved"
+        }).where(
+            eq(DB.Schema.stablePromotionRequests.id, request.id)
+        );
+
+        
+
+        return APIResponse.successNoData(c, "Stable promotion request approved successfully");
     }
 );

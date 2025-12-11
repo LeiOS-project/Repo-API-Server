@@ -67,7 +67,7 @@ router.post('/',
 	}
 );
 
-router.use('/:version',
+router.use('/:version/*',
 	
 	zValidator('param', OSReleasesModel.Param),
 	

@@ -218,6 +218,8 @@ export const DOCS_TAGS = {
         PACKAGES: "Developer API / Packages",
         PACKAGES_RELEASES: "Developer API / Packages / Releases",
         PACKAGES_STABLE_REQUESTS: "Developer API / Packages / Stable Promotion Requests",
+
+        TASKS: "Developer API / Tasks",
     },
     ADMIN_API: {
         BASE: "Admin API",
@@ -229,6 +231,8 @@ export const DOCS_TAGS = {
         STABLE_PROMOTION_REQUESTS: "Admin API / Stable Promotion Requests",
 
         OS_RELEASES: "Admin API / OS Releases",
+
+        TASKS: "Admin API / Tasks",
     },
     ACCOUNT: "Account",
     AUTHENTICATION: "Authentication",

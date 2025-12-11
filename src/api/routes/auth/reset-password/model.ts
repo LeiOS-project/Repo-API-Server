@@ -1,10 +1,10 @@
-import z from "zod";
+import z, { email } from "zod";
 import { UserDataPolicys } from "../../../utils/shared-models/accountData";
 
 export namespace ResetPasswordModel.RequestReset {
 
     export const Body = z.object({
-        username: z.string().min(1)
+        email: z.email()
     });
     export type Body = z.infer<typeof Body>;
 }

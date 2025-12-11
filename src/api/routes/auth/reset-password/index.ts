@@ -87,7 +87,7 @@ router.post('/request',
         const requestData = c.req.valid("json");
 
         const user = DB.instance().select().from(DB.Schema.users).where(
-            eq(DB.Schema.users.username, requestData.username)
+            eq(DB.Schema.users.email, requestData.email)
         ).get();
 
         if (user) {

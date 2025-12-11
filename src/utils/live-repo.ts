@@ -1,3 +1,4 @@
+import { Logger } from "../utils/logger";
 
 export class LiveRepoUtils {
 
@@ -19,7 +20,9 @@ export class LiveRepoUtils {
             accessKeyId: s3Options.accessKeyId,
             secretAccessKey: s3Options.secretAccessKey,
         });
-        
+
+        Logger.info("Uploading additional repository files to S3 if they do not already exist...");
+
         await this.uploadFileToS3IfNotExists(
             s3Client,
             "public-key.gpg",
@@ -37,11 +40,12 @@ export class LiveRepoUtils {
     }
 
     private static async uploadFileToS3IfNotExists(s3Client: Bun.S3Client, key: string, filePath: string, prefix?: string) {
-
+        
         const fullPath = prefix ? prefix.endsWith("/") ? `${prefix}${key}` : `${prefix}/${key}` : key;
 
         if (!await s3Client.exists(fullPath)) {
             await s3Client.write(fullPath, Bun.file(filePath));
+            Logger.info(`Uploaded ${key} to S3`);
         }
     }
 

@@ -292,21 +292,66 @@ export namespace AptlyAPI.Packages {
 
 }
 
+export namespace AptlyAPI.Snapshots {
+
+    export async function createSnapshotOfRepo(repoName: AptlyAPI.Utils.Repos, snapshotName: string, description?: string) {
+        const snapshotResult = await AptlyAPIServer.getClient().postApiReposByNameSnapshots({
+            path: {
+                name: "leios-stable"
+            },
+            body: {
+                Name: snapshotName,
+                Description: description || `Snapshot of ${repoName} created at ${new Date().toISOString()}`,
+            }
+        });
+        return snapshotResult.data !== null;
+    }
+
+    export async function createStableReleaseSnapshot(version: string) {
+        const snapshotName = `leios-stable-${version}`;
+        return createSnapshotOfRepo("leios-stable", snapshotName, `LeiOS Stable Release ${version}`);
+    }
+
+}
+
 export namespace AptlyAPI.Publishing {
 
     // testing repo is updated continuously without snapshots
     export async function updateLiveTestingRepo() {
-        const result = await AptlyAPIServer.getClient().postApiPublishByPrefixByDistributionUpdate({
+        const result = await AptlyAPIServer.getClient().putApiPublishByPrefixByDistribution({
             path: {
                 prefix: "s3:leios-live-repo",
                 distribution: "testing"
             },
-            body: {}
+            body: {
+                Signing: AptlyUtils.Signing.SigningConfig
+            }
         });
 
         if (!result.data) {
             throw new Error("Failed to update live testing repository: " + result.error);
         }
+    }
+
+    export async function publishReleaseSnapshotToLiveStable(version: string) {
+        const result = await AptlyAPIServer.getClient().putApiPublishByPrefixByDistribution({
+            path: {
+                prefix: `s3:leios-live-repo`,
+                distribution: "stable"
+            },
+            body: {
+                Snapshots: [{
+                    Name: `leios-stable-${version}`,
+                    Component: "main"
+                }],
+            }
+        });
+
+        if (!result.data) {
+            throw new Error("Failed to publish snapshot to S3: " + result.error);
+        }
+
+        return true;
     }
 
 }

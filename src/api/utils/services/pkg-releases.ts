@@ -6,6 +6,7 @@ import { eq, and, or, sql } from "drizzle-orm";
 import { AuthHandler } from "../authHandler";
 import { AptlyAPI } from "../../../aptly/api";
 import { AptlyUtils } from "../../../aptly/utils";
+import { TaskScheduler } from "../../../tasks";
 
 export class PkgReleasesService {
 
@@ -71,7 +72,7 @@ export class PkgReleasesService {
                 return APIResponse.serverError(c, "Failed to copy package release into testing repository");
             }
 
-            const updatePublishResult = await AptlyAPI.Publishing.updateLiveTestingRepo();
+            await TaskScheduler.enqueueTask("testing-repo:update", {}, {})
 
             await DB.instance().insert(DB.Schema.packageReleases).values({
                 package_id: packageData.id,

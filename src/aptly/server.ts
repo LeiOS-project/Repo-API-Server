@@ -69,6 +69,7 @@ export class AptlyAPIServer {
 
         await this.ensureDirectories();
         await AptlyUtils.downloadAptlyBinaryIfNeeded(this.aptlyBinaryPath);
+        await AptlyUtils.Signing.ensureSigningConfigExists();
         await this.setupAptlyConfig();
 
         this.isInitialized = true;

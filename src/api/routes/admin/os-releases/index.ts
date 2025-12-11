@@ -53,7 +53,7 @@ router.post('/',
 			return APIResponse.conflict(c, "OS release with this version already exists");
 		}
 
-		const task = await TaskScheduler.enqueue("os-release:create", { version });
+		const task = await TaskScheduler.enqueueTask("os-release:create", { version });
 
 		return APIResponse.accepted(c, "OS release queued", {
 			taskId: task.id,

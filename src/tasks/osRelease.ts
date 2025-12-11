@@ -1,6 +1,6 @@
 import { TaskHandler } from "@cleverjs/utils";
 import { DB } from "../db";
-import { eq, is } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { AptlyAPI } from "../aptly/api";
 
 interface Payload {
@@ -69,11 +69,56 @@ OsReleaseTask.addStep("Move packages from archive to local stable repo", async (
 
             // delete in stable for this package first but ensure we only delete for this architecture
             await AptlyAPI.Packages.deleteInRepo("leios-stable", packageName, undefined, release.architecture);
+
+            await AptlyAPI.Packages.copyIntoRepo("leios-stable", packageName, release.versionWithLeiosPatch, release.architecture);
+
         } catch (err) {
             logger.error("Error moving package release ID", payload.pkgReleasesToIncludeByID[state.nextPackageIndexToMove], ":", err);
         }
     }
 
     return { success: true };
+
+});
+
+OsReleaseTask.addStep("Create OS release snapshot", async (payload, logger) => {
+
+    try {
+        const snapshotName = `leios-stable-${payload.version}`;
+        const snapshotResult = await AptlyAPI.Snapshots.createSnapshotOfRepo("leios-stable", snapshotName, "LeiOS Release");
+
+        if (!snapshotResult) {
+            logger.error("Failed to create snapshot for OS release");
+            return { success: false, message: "Failed to create snapshot" };
+        }
+
+        logger.info("OS release snapshot created:", snapshotName);
+        return { success: true };
+
+    } catch (err) {
+        logger.error("Error creating OS release snapshot:", err);
+        return { success: false, message: Error.isError(err) ? err.message : "Unknown error" };
+    }
+
+});
+
+OsReleaseTask.addStep("Publish OS release to S3", async (payload, logger) => {
+
+    try {
+        const snapshotName = `leios-stable-${payload.version}`;
+        const publishResult = await AptlyAPI.Publishing.publishReleaseSnapshotToLiveStable(payload.version);
+
+        if (!publishResult) {
+            logger.error("Failed to publish OS release snapshot to live stable repo");
+            return { success: false, message: "Failed to publish snapshot" };
+        }
+
+        logger.info("OS release published to live stable repo from snapshot:", snapshotName);
+        return { success: true };
+
+    } catch (err) {
+        logger.error("Error publishing OS release snapshot:", err);
+        return { success: false, message: Error.isError(err) ? err.message : "Unknown error" };
+    }
 
 });

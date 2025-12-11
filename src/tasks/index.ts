@@ -5,6 +5,7 @@ import { TaskHandler } from "@cleverjs/utils";
 import { OsReleaseTask } from "./osRelease";
 import { ConfigHandler } from "../utils/config";
 import fs from "fs";
+import { UpdateTestingRepoTask } from "./updateTestingRepo";
 
 type AdditionalTaskMeta = {
 	created_by_user_id: number;
@@ -142,9 +143,6 @@ export class TaskStorage extends TaskHandler.AbstractStorageDriver<TaskData, Add
 
 }
 
-const Registry = new TaskHandler.TaskFNRegistry()
-.register(OsReleaseTask);
-
 class PersistentLogger implements TaskHandler.PersistentTaskLoggerLike {
 
 	readonly type = "persistent";
@@ -177,6 +175,10 @@ class PersistentLogger implements TaskHandler.PersistentTaskLoggerLike {
 	}
 
 }
+
+const Registry = new TaskHandler.TaskFNRegistry()
+.register(OsReleaseTask)
+.register(UpdateTestingRepoTask);
 
 export const TaskScheduler = new TaskHandler({
 	storage: new TaskStorage(),

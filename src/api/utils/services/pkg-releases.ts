@@ -60,8 +60,8 @@ export class PkgReleasesService {
                 return APIResponse.serverError(c, "Failed to upload and verify package release");
             }
 
-            // cleanup everything in testing repo first
-            const cleanupResult = await AptlyAPI.Packages.deleteInRepo("leios-testing", packageData.name);
+            // cleanup everything in testing repo first but ensure we only cleanup for this architecture
+            const cleanupResult = await AptlyAPI.Packages.deleteInRepo("leios-testing", packageData.name, undefined, arch);
             if (!cleanupResult) {
                 return APIResponse.serverError(c, "Failed to clean up existing package releases in testing repository");
             }

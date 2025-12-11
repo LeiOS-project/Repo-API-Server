@@ -127,7 +127,7 @@ router.put('/password',
             eq(DB.Schema.users.id, authContext.user_id)
         ).run();
 
-        SessionHandler.inValidateAllSessionsForUser(authContext.user_id);
+        await SessionHandler.inValidateAllSessionsForUser(authContext.user_id);
 
         return APIResponse.successNoData(c, "Password changed successfully");
     },

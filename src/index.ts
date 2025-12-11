@@ -21,7 +21,8 @@ export class Main {
         Logger.setLogLevel(config.LRA_LOG_LEVEL ?? "info");
 
         await DB.init(
-            config.LRA_DB_PATH ?? "./data/db.sqlite"
+            config.LRA_DB_PATH ?? "./data/db.sqlite",
+            config.LRA_CONFIG_BASE_DIR ?? "./config"
         );
 
         // start task scheduler
@@ -33,7 +34,7 @@ export class Main {
             bucket: config.LRA_S3_BUCKET,
             accessKeyId: config.LRA_S3_ACCESS_KEY_ID,
             secretAccessKey: config.LRA_S3_SECRET_ACCESS_KEY
-        }, config.LRA_PUBLIC_KEY_PATH ?? "./data/keys/public-key.gpg");
+        }, config.LRA_PUBLIC_KEY_PATH ?? "./config/keys/public-key.gpg");
 
         await AptlyAPIServer.init({
             aptlyRoot: config.LRA_APTLY_ROOT ?? "./data/aptly",
@@ -47,8 +48,8 @@ export class Main {
                 secretAccessKey: config.LRA_S3_SECRET_ACCESS_KEY
             },
             keySettings: {
-                publicKeyPath: config.LRA_PUBLIC_KEY_PATH ?? "./data/keys/public-key.gpg",
-                privateKeyPath: config.LRA_PRIVATE_KEY_PATH ?? "./data/keys/private-key.gpg",
+                publicKeyPath: config.LRA_PUBLIC_KEY_PATH ?? "./config/keys/public-key.gpg",
+                privateKeyPath: config.LRA_PRIVATE_KEY_PATH ?? "./config/keys/private-key.gpg",
             }
         });
 

@@ -10,15 +10,18 @@ export class DB {
 
     protected static db: DrizzleDB;
 
-    static async init(path: string) {
+    static async init(
+        path: string,
+        configBaseDir: string
+    ) {
         this.db = drizzle(path);
 
-        await this.createInitialAdminUserIfNeeded();
+        await this.createInitialAdminUserIfNeeded(configBaseDir);
 
         Logger.info(`Database initialized at ${path}`);
     }
 
-    static async createInitialAdminUserIfNeeded() {
+    static async createInitialAdminUserIfNeeded(configBaseDir: string) {
         const usersTableEmpty = (await this.db.select().from(DB.Schema.users).limit(1)).length === 0;
         if (!usersTableEmpty) return;
 
@@ -33,9 +36,9 @@ export class DB {
             role: "admin"
         });
 
-        Bun.file('./data/initial_admin_credentials.txt').write(`Username: ${username}\nPassword: ${randomPassword}\n`);
+        Bun.file(`${configBaseDir}/initial_admin_credentials.txt`).write(`Username: ${username}\nPassword: ${randomPassword}\n`);
 
-        Logger.info(`Initial admin user created with username: ${username} and password: ${randomPassword} (also saved to ./data/initial_admin_credentials.txt)`);
+        Logger.info(`Initial admin user created with username: ${username} and password: ${randomPassword} (also saved to ${configBaseDir}/initial_admin_credentials.txt)`);
     }
 
     static async createInitialReleasesMetaIfNeeded() {

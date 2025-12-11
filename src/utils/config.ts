@@ -117,6 +117,7 @@ export class ConfigHandler {
         .add("LRA_APTLY_ROOT", false)
         .add("LRA_APTLY_PORT", false)
 
+        .add("LRA_CONFIG_BASE_DIR", false)
         .add("LRA_PRIVATE_KEY_PATH", true)
         .add("LRA_PUBLIC_KEY_PATH", true)
 

@@ -5,6 +5,7 @@ import { PackageModel } from "../shared-models/package";
 import { eq, and, or } from "drizzle-orm";
 import { AuthHandler } from "../authHandler";
 import { AptlyAPI } from "../../../aptly/api";
+import { TaskScheduler } from "../../../tasks";
 
 export class PackagesService {
 
@@ -122,6 +123,8 @@ export class PackagesService {
         );
 
         await AptlyAPI.Packages.deleteAllInAllRepos(packageData.name);
+
+        await TaskScheduler.enqueueTask("testing-repo:update", {}, { created_by_user_id: null });
 
         return APIResponse.successNoData(c, "Package deleted successfully");
 

@@ -289,6 +289,11 @@ export class AptlyUtils {
 export namespace AptlyUtils.Signing {
 
     async function ensureBinaryGpgKeyring(sourcePath: string, outputPath: string) {
+
+        if (await fs.exists(outputPath)) {
+            return outputPath;
+        }
+
         const fileExists = await fs.access(sourcePath).then(() => true).catch(() => false);
         if (!fileExists) {
             throw new Error(`GPG key file not found at ${sourcePath}`);

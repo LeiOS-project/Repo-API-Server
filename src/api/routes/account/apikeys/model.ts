@@ -33,8 +33,6 @@ export namespace AccountAPIKeysModel.Create {
         ])
     }).omit({
         id: true,
-        created_at: true,
-        updated_at: true,
         user_id: true,
         user_role: true,
         hashed_token: true,

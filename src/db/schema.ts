@@ -1,5 +1,5 @@
 import type { TaskHandler } from '@cleverjs/utils';
-import { sql } from 'drizzle-orm';
+import { desc, sql } from 'drizzle-orm';
 import {
     sqliteTable,
     int,
@@ -53,6 +53,7 @@ export const apiKeys = sqliteTable('api_keys', {
     user_role: text({
         enum: ['admin', 'developer', 'user']
     }).notNull().references(() => users.role),
+    description: text().notNull(),
     expires_at: int(),
 });
 

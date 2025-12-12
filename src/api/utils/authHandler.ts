@@ -144,7 +144,7 @@ export class APIKeyHandler {
 
     static readonly API_KEY_PREFIX = "lra_apikey_";
 
-    static async createApiKey(userID: number, expiresInDays?: number) {
+    static async createApiKey(userID: number, description: string, expiresInDays?: number) {
         const expiresAt = expiresInDays ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).getTime() : null;
 
         const tokenID = AuthUtils.createRandomTokenID();
@@ -161,6 +161,7 @@ export class APIKeyHandler {
             hashed_token: await AuthUtils.hashTokenBase(tokenBase),
             user_id: userID,
             user_role: await AuthUtils.getUserRole(userID) || 'user',
+            description: description,
             expires_at: expiresAt
         }).returning().get();
 
@@ -168,7 +169,8 @@ export class APIKeyHandler {
             token: fullToken,
             user_id: result.user_id,
             user_role: result.user_role,
-            expires_at: result.expires_at
+            expires_at: result.expires_at,
+            description: result.description,
         } satisfies Omit<DB.Models.ApiKey, 'id' | 'hashed_token'> & { token: string; };
     }
 

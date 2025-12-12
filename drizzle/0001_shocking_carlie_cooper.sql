@@ -1,0 +1,1 @@
+ALTER TABLE `api_keys` ADD `description` text NOT NULL;

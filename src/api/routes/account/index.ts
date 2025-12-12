@@ -7,6 +7,7 @@ import { APIResponse } from "../../utils/api-res";
 import { APIResponseSpec, APIRouteSpec } from "../../utils/specHelpers";
 import { AuthHandler, SessionHandler } from "../../utils/authHandler";
 import { DOCS_TAGS } from "../../docs";
+import { router as apiKeyRouter } from "./apikeys";
 
 export const router = new Hono().basePath('/account');
 
@@ -177,3 +178,5 @@ router.delete('/',
         return APIResponse.successNoData(c, "Account deleted successfully");
     },
 );
+
+router.route("/", apiKeyRouter);

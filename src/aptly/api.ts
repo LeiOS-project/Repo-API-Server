@@ -320,7 +320,7 @@ export namespace AptlyAPI.Publishing {
     export async function updateLiveTestingRepo() {
         const result = await AptlyAPIServer.getClient().putApiPublishByPrefixByDistribution({
             path: {
-                prefix: "s3:leios-live-repo",
+                prefix: "s3:leios-live-repo:",
                 distribution: "testing"
             },
             body: {
@@ -329,14 +329,14 @@ export namespace AptlyAPI.Publishing {
         });
 
         if (!result.data) {
-            throw new Error("Failed to update live testing repository: " + result.error);
+            throw new Error("Failed to update live testing repository: " + result.error.error);
         }
     }
 
     export async function publishReleaseSnapshotToLiveStable(version: string) {
         const result = await AptlyAPIServer.getClient().putApiPublishByPrefixByDistribution({
             path: {
-                prefix: `s3:leios-live-repo`,
+                prefix: `s3:leios-live-repo:`,
                 distribution: "stable"
             },
             body: {

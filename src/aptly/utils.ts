@@ -291,6 +291,7 @@ export namespace AptlyUtils.Signing {
     async function ensureBinaryGpgKeyring(sourcePath: string, outputPath: string) {
 
         if (await fs.exists(outputPath)) {
+            Logger.info(`GPG keyring already exists at ${outputPath}, skipping dearmoring.`);
             return outputPath;
         }
 

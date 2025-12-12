@@ -8,14 +8,25 @@ export class RuntimeMetadata {
         "os-release-pending-packages": z.array(z.number()).default([]),
     } as const;
 
-    protected static async getMetadata<T extends keyof typeof this.schemas>(key: T): Promise<z.infer<(typeof this.schemas)[T]>> {
+    protected static async getMetadata<T extends keyof typeof this.schemas>(key: T, createIfNotFound = false): Promise<z.infer<(typeof this.schemas)[T]>> {
         const record = await DB.instance().select().from(DB.Schema.metadata).where(
             eq(DB.Schema.metadata.key, key)
         ).get();
 
         if (!record) {
-            throw new Error(`Metadata with key '${key}' not found`);
+
+            if (!createIfNotFound) {
+                throw new Error(`Metadata with key '${key}' not found`);
+            }
+
+            const defaultData = this.schemas[key].parse(undefined);
+            await DB.instance().insert(DB.Schema.metadata).values({
+                key: key,
+                data: defaultData,
+            });
+            return defaultData;
         }
+
         return this.schemas[key].parse(record.data);
     }
 
@@ -28,7 +39,7 @@ export class RuntimeMetadata {
     }
 
     static async getOSReleasePendingPackages() {
-        return await this.getMetadata("os-release-pending-packages");
+        return await this.getMetadata("os-release-pending-packages", true);
     }
 
     static async addOSReleasePendingPackage(packageReleaseId: number) {

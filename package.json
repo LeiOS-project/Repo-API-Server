@@ -9,7 +9,7 @@
         "db:generate": "bun scripts/db-utils && drizzle-kit generate --config=drizzle.config.ts",
         "db:migrate": "bun scripts/db-utils && drizzle-kit migrate --config=drizzle.config.ts",
         "db:push": "bun scripts/db-utils && drizzle-kit push --config=drizzle.config.ts",
-        "start": "bun run src/index.ts",
+        "start": "bun run scripts/entrypoint.ts",
         "aptly-api-client:generate": "openapi-ts -f ./openapi-ts.aptly-api.config.ts"
     },
     "devDependencies": {

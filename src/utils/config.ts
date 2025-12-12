@@ -107,6 +107,8 @@ export class ConfigHandler {
     private static schema = new ConfigSchema()
         .add("LRA_LOG_LEVEL", false, ["debug", "info", "warn", "error", "critical"])
 
+        .add("LRA_HUB_URL", false)
+
         .add("LRA_API_HOST", false)
         .add("LRA_API_PORT", false)
 

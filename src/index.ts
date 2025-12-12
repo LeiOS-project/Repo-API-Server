@@ -53,7 +53,7 @@ export class Main {
             }
         });
 
-        await API.init();
+        await API.init([config.LRA_HUB_URL || "https://hub.leios.dev"]);
 
         await AptlyAPIServer.start();
 

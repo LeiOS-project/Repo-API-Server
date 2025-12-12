@@ -125,6 +125,7 @@ export class PackagesService {
         await AptlyAPI.Packages.deleteAllInAllRepos(packageData.name);
 
         await TaskScheduler.enqueueTask("testing-repo:update", {}, { created_by_user_id: null });
+        // @TODO: Enqueue a task to update the stable reo as well
 
         return APIResponse.successNoData(c, "Package deleted successfully");
 

@@ -9,6 +9,7 @@ import { UpdateTestingRepoTask } from "./updateTestingRepo";
 
 type AdditionalTaskMeta = {
 	created_by_user_id: number | null;
+	tag: string;
 };
 type TaskData = TaskHandler.BaseTaskData<AdditionalTaskMeta>;
 
@@ -17,9 +18,10 @@ export class TaskStorage extends TaskHandler.AbstractStorageDriver<TaskData, Add
 	private transportToDBFormat(task: TaskData, withID?: true): DB.Models.ScheduledTask;
 	private transportToDBFormat(task: TaskData, withID: false): Omit<DB.Models.ScheduledTask, "id">;
 	private transportToDBFormat(task: TaskData, withID = true): DB.Models.ScheduledTask {
-		return {//@ts-ignore
-			id: withID ? task.id! : undefined,
+		return {
+			id: withID ? task.id! : undefined as any,
 			function: task.fn,
+			tag: task.tag,
 			created_by_user_id: task.created_by_user_id,
 			args: task.args,
 			status: task.status,
@@ -36,6 +38,7 @@ export class TaskStorage extends TaskHandler.AbstractStorageDriver<TaskData, Add
 		return {
 			id: dbModel.id,
 			fn: dbModel.function,
+			tag: dbModel.tag,
 			created_by_user_id: dbModel.created_by_user_id,
 			args: dbModel.args,
 			status: dbModel.status,

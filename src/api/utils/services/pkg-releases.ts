@@ -123,7 +123,7 @@ export class PkgReleasesService {
                 return APIResponse.serverError(c, "Failed to copy package release into testing repository");
             }
 
-            await TaskScheduler.enqueueTask("testing-repo:update", {}, { created_by_user_id: null });
+            await TaskScheduler.enqueueTask("testing-repo:update", {}, { created_by_user_id: null, tag: `update-testing-repo-after-package-release-upload:${releaseData.id}:${arch}` });
 
             releaseData.architecture.push(arch);
 
@@ -167,6 +167,8 @@ export class PkgReleasesService {
             eq(DB.Schema.packageReleases.id, releaseData.id)
         );
         await AptlyAPI.Packages.deleteAllInAllRepos(packageData.name, releaseData.versionWithLeiosPatch, undefined);
+
+        await TaskScheduler.enqueueTask("testing-repo:update", {}, { created_by_user_id: null, tag: "update-testing-repo-after-package-release-deletion" });
         
         return APIResponse.successNoData(c, "Package release deleted successfully");
     }

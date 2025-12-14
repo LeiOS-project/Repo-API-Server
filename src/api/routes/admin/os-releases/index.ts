@@ -58,7 +58,7 @@ router.post('/',
 			pkgReleasesToIncludeByID: await RuntimeMetadata.getOSReleasePendingPackages(),
 			version,
 			timestamp: now.getTime()
-		}, { created_by_user_id: null });
+		}, { created_by_user_id: null, tag: `create-os-release:${version}` });
 
 		return APIResponse.accepted(c, "OS release creation task enqueued", {
 			taskID,

@@ -34,7 +34,7 @@ router.post('/:versionWithLeiosPatch',
 
         responses: APIResponseSpec.describeWithWrongInputs(
             APIResponseSpec.createdNoData("Package release created successfully"),
-            APIResponseSpec.conflict("Conflict: Package release with this version already exists")
+            APIResponseSpec.conflict("Package release with this version already exists")
         )
     }),
 
@@ -43,7 +43,7 @@ router.post('/:versionWithLeiosPatch',
     async (c) => {
         const { versionWithLeiosPatch } = c.req.valid("param");
 
-        return await PkgReleasesService.createRelease(c, file, versionWithLeiosPatch, false);
+        return await PkgReleasesService.createRelease(c, versionWithLeiosPatch);
     }
 )
 
@@ -56,7 +56,7 @@ router.use('/:versionWithLeiosPatch/*',
         // @ts-ignore
         const { versionWithLeiosPatch } = c.req.valid("param") as { versionWithLeiosPatch: string};
 
-        return await PkgReleasesService.pkgReleaseMiddleware(c, next, versionWithLeiosPatch, arch);
+        return await PkgReleasesService.pkgReleaseMiddleware(c, next, versionWithLeiosPatch);
     }
 );
 
@@ -69,7 +69,7 @@ router.get('/:versionWithLeiosPatch',
         tags: [DOCS_TAGS.DEV_API.PACKAGES_RELEASES],
 
         responses: APIResponseSpec.describeBasic(
-            APIResponseSpec.success("Package release retrieved successfully", PackageReleaseModel.GetReleaseByVersionAndArch.Response),
+            APIResponseSpec.success("Package release retrieved successfully", PackageReleaseModel.GetReleaseByVersion.Response),
             APIResponseSpec.notFound("Package release with specified version not found")
         )
     }),
@@ -82,19 +82,18 @@ router.get('/:versionWithLeiosPatch',
 router.post('/:versionWithLeiosPatch/:arch',
 
     APIRouteSpec.authenticated({
-        summary: "Create a new package release",
-        description: "Create a new release for the specified package.",
+        summary: "Upload package release file for architecture",
+        description: "Upload a release file for the specified package and architecture.",
         tags: [DOCS_TAGS.DEV_API.PACKAGES_RELEASES],
 
         responses: APIResponseSpec.describeWithWrongInputs(
-            APIResponseSpec.createdNoData("Package release created successfully"),
-            APIResponseSpec.conflict("Conflict: Package release with this version already exists")
+            APIResponseSpec.createdNoData("Package release file uploaded successfully"),
+            APIResponseSpec.conflict("Package release already contains a release for this architecture"),
+            APIResponseSpec.serverError("Failed to upload and verify package release asset")
         )
     }),
 
-    zValidator("form", z.object({
-        file: z.file()
-    })),
+    zValidator("form", PackageReleaseModel.UploadReleaseAssetForArch.FileInput),
 
     zValidator("param", PackageReleaseModel.ParamWithArch),
 

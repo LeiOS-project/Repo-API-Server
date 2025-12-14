@@ -20,7 +20,7 @@ export namespace PackageReleaseModel {
 
 }
 
-export namespace PackageReleaseModel.GetReleaseByVersionAndArch {
+export namespace PackageReleaseModel.GetReleaseByVersion {
 
     export const Response = createSelectSchema(DB.Schema.packageReleases);
     export type Response = z.infer<typeof Response>;
@@ -29,19 +29,26 @@ export namespace PackageReleaseModel.GetReleaseByVersionAndArch {
 
 export namespace PackageReleaseModel.GetAll {
 
-    export const Response = z.array(PackageReleaseModel.GetReleaseByVersionAndArch.Response);
+    export const Response = z.array(PackageReleaseModel.GetReleaseByVersion.Response);
     export type Response = z.infer<typeof Response>;
 
 }
 
 export namespace PackageReleaseModel.CreateRelease {
 
-    
-
     // export const Response = z.object({
     //     version: z.string(),
     //     arch: z.enum(["amd64", "arm64"]),
     // });
     // export type Response = z.infer<typeof Response>;
+
+}
+
+export namespace PackageReleaseModel.UploadReleaseAssetForArch {
+
+    export const FileInput = z.object({
+        file: z.file().min(1).max(1024 * 1024 * 1024), // Max 1 GB
+    });
+        
 
 }

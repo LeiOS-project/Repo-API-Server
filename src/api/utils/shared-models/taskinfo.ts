@@ -5,7 +5,10 @@ import { DB } from "../../../db";
 export namespace TaskStatusModel {
 
     export const Param = z.object({
-        taskIDorTag: z.union([z.coerce.number().int().positive(), z.string()])
+        taskIDorTag: z.union([
+            z.coerce.number().int().positive().meta({ title: "Task ID" }),
+            z.string().meta({ title: "Task Tag" })
+        ])
     });
 
     export type Param = z.infer<typeof Param>;

@@ -23,6 +23,13 @@ export namespace PackageModel.CreatePackageAsAdmin {
             /^[a-z0-9][a-z0-9+.-]{1,62}$/,
             "Package names must be 2-63 chars, lowercase, and may contain + - ."
         )
+    }).omit({
+        id: true,
+        created_at: true,
+        latest_stable_release_amd64: true,
+        latest_stable_release_arm64: true,
+        latest_testing_release_amd64: true,
+        latest_testing_release_arm64: true
     });
 
     export type Body = z.infer<typeof Body>;
@@ -42,7 +49,12 @@ export namespace PackageModel.UpdatePackage {
 
     export const Body = createUpdateSchema(DB.Schema.packages).omit({
         name: true,
-        owner_user_id: true
+        owner_user_id: true,
+        created_at: true,
+        latest_stable_release_amd64: true,
+        latest_stable_release_arm64: true,
+        latest_testing_release_amd64: true,
+        latest_testing_release_arm64: true
     }).partial().refine(
         (data) => Object.values(data).some((value) => value !== undefined),
         { message: "At least one field must be provided" }

@@ -117,7 +117,7 @@ export const scheduled_tasks = sqliteTable('scheduled_tasks', {
     autoDelete: int({ mode: 'boolean' }).notNull().default(sql`0`),
     storeLogs: int({ mode: 'boolean' }).notNull().default(sql`0`),
     status: text({ enum: ["pending", "running", "paused", "failed", "completed"] }).notNull().default('pending'),
-    created_at: SQLUtils.getCreatedAtColumn(),
+    created_at: int().notNull(),
     finished_at: int(),
     result: text({ mode: 'json' }).$type<Record<string, any>>(),
     message: text(),

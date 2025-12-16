@@ -8,4 +8,13 @@ export namespace ApiHelperModels.ListAll {
         order: z.enum(["newest", "oldest"]).default("newest")
     });
 
+    export type Query = z.infer<typeof Query>;
+    
+
+    export const QueryWithSearch = Query.extend({
+        searchString: z.string().optional(),
+    });
+
+    export type QueryWithSearch = z.infer<typeof QueryWithSearch>;
+
 }

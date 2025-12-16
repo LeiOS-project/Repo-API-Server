@@ -5,6 +5,7 @@ import { TaskStatusModel } from "../../../utils/shared-models/taskinfo";
 import { TaskInfoService } from "../../../utils/services/taskinfo";
 import { validator as zValidator } from "hono-openapi";
 import z from "zod";
+import { ApiHelperModels } from "../../../utils/shared-models/api-helper-models";
 
 export const router = new Hono().basePath("/tasks");
 
@@ -20,8 +21,12 @@ router.get('/',
         )
     }),
 
+    zValidator("query", ApiHelperModels.ListAll.QueryWithSearch),
+
     async (c) => {
-        return await TaskInfoService.getAllTasks(c, false);
+        const query_opts = c.req.valid("query");
+
+        return await TaskInfoService.getAllTasks(c, query_opts, false);
     }
 );
 

@@ -1,21 +1,38 @@
 import { Context } from "hono";
 import { DB } from "../../../db";
 import { APIResponse } from "../api-res";
-import { eq, and, or } from "drizzle-orm";
+import { eq, and, or, like, desc, asc } from "drizzle-orm";
 import { AuthHandler } from "../authHandler";
 import { ConfigHandler } from "../../../utils/config";
+import { ApiHelperModels } from "../shared-models/api-helper-models";
 
 export class TaskInfoService {
 
-    static async getAllTasks(c: Context, asAdmin = false) {
+    static async getAllTasks(c: Context, queryOpts: ApiHelperModels.ListAll.QueryWithSearch, asAdmin = false) {
+
         if (!asAdmin) {
 
             // @ts-ignore
             const authContext = c.get("authContext") as AuthHandler.AuthContext;
 
-            const tasks = await DB.instance().select().from(DB.Schema.scheduled_tasks).where(
-                eq(DB.Schema.scheduled_tasks.created_by_user_id, authContext.user_id)
+            const whereClause = and(
+                eq(DB.Schema.scheduled_tasks.created_by_user_id, authContext.user_id),
+                queryOpts.searchString
+                    ? like(DB.Schema.scheduled_tasks.tag, `%${queryOpts.searchString}%`)
+                    : undefined
             );
+
+            const tasks = await DB.instance().select()
+            .from(DB.Schema.scheduled_tasks)
+            .where(whereClause)
+            .orderBy(
+                queryOpts.order === "newest" ?
+                    desc(DB.Schema.stablePromotionRequests.created_at) :
+                    asc(DB.Schema.stablePromotionRequests.created_at)
+            )
+            .limit(queryOpts.limit)
+            .offset(queryOpts.offset);
+            
 
             return APIResponse.success(c, "Scheduled tasks retrieved", tasks);
         } else {

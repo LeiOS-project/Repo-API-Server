@@ -3,8 +3,7 @@ import { desc, sql } from 'drizzle-orm';
 import {
     sqliteTable,
     int,
-    text,
-    
+    text
 } from 'drizzle-orm/sqlite-core';
 import { SQLUtils } from './utils';
 

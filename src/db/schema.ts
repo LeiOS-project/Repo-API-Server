@@ -111,7 +111,6 @@ export const stablePromotionRequests = sqliteTable('stable_promotion_requests', 
 export const scheduled_tasks = sqliteTable('scheduled_tasks', {
     id: int().primaryKey({ autoIncrement: true }),
     function: text().notNull(),
-    tag: text().notNull(),
     created_by_user_id: int().references(() => users.id),
     args: text({ mode: 'json' }).$type<Record<string, any>>().notNull(),
     autoDelete: int({ mode: 'boolean' }).notNull().default(sql`0`),
@@ -149,5 +148,6 @@ export const os_releases = sqliteTable('os_releases', {
     // YYYY.MM.(release_this_month) format
     version: text().notNull().unique(),
     created_at: SQLUtils.getCreatedAtColumn(),
-    published_at: int().notNull(),
+    taskID: int().notNull().references(() => scheduled_tasks.id),
+    // published_at: int().references(() => scheduled_tasks.finished_at),
 });

@@ -4,7 +4,6 @@ import { DOCS_TAGS } from "../../../docs";
 import { TaskStatusModel } from "../../../utils/shared-models/taskinfo";
 import { TaskInfoService } from "../../../utils/services/taskinfo";
 import { validator as zValidator } from "hono-openapi";
-import z from "zod";
 import { ApiHelperModels } from "../../../utils/shared-models/api-helper-models";
 
 export const router = new Hono().basePath("/tasks");
@@ -30,19 +29,19 @@ router.get('/',
     }
 );
 
-router.use('/:taskIDorTag/*',
+router.use('/:taskID/*',
 
     zValidator("param", TaskStatusModel.Param),
 
     async (c, next) => {
         // @ts-ignore
-        const { taskIDorTag } = c.req.valid("param") as { taskIDorTag: number | string };
+        const { taskID } = c.req.valid("param") as { taskID: number };
 
-        TaskInfoService.taskMiddleware(c, next, taskIDorTag, false);
+        TaskInfoService.taskMiddleware(c, next, taskID, false);
     }
 );
 
-router.get('/:taskIDorTag',
+router.get('/:taskID',
 
     APIRouteSpec.authenticated({
         summary: "Get scheduled task",
@@ -50,7 +49,7 @@ router.get('/:taskIDorTag',
         tags: [DOCS_TAGS.ADMIN_API.TASKS],
 
         responses: APIResponseSpec.describeBasic(
-            APIResponseSpec.success("Task retrieved successfully", TaskStatusModel.GetByIDorTag.Response),
+            APIResponseSpec.success("Task retrieved successfully", TaskStatusModel.GetByID.Response),
             APIResponseSpec.notFound("Task with specified ID or Tag not found")
         )
     }),
@@ -60,7 +59,7 @@ router.get('/:taskIDorTag',
     }
 );
 
-router.get('/:taskIDorTag/logs',
+router.get('/:taskID/logs',
 
     APIRouteSpec.authenticated({
         summary: "Get scheduled task logs",
@@ -68,7 +67,7 @@ router.get('/:taskIDorTag/logs',
         tags: [DOCS_TAGS.ADMIN_API.TASKS],
 
         responses: APIResponseSpec.describeBasic(
-            APIResponseSpec.success("Task logs retrieved successfully", TaskStatusModel.GetLogsByIDorTag.Response),
+            APIResponseSpec.success("Task logs retrieved successfully", TaskStatusModel.GetLogsByID.Response),
             APIResponseSpec.badRequest("Logs are not stored for this task"),
             APIResponseSpec.notFound("Task with specified ID or Tag not found / Log file not found for this task")
         )

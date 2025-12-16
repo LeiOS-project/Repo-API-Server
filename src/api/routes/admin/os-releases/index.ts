@@ -10,6 +10,8 @@ import { eq, desc } from "drizzle-orm";
 import { TaskScheduler } from "../../../../tasks";
 import { RuntimeMetadata } from "../../../utils/metadata";
 import { OSReleaseUtils } from "../../../utils/os-release-utils";
+import { ApiHelperModels } from "../../../utils/shared-models/api-helper-models";
+import { p } from "@hey-api/openapi-ts/dist/config-DCoXG8pO";
 
 export const router = new Hono().basePath('/os-releases');
 
@@ -25,9 +27,33 @@ router.get('/',
 		)
 	}),
 
+	zValidator("query", ApiHelperModels.ListAll.Query),
+
 	async (c) => {
-		const releases = await DB.instance().select().from(DB.Schema.os_releases);
-		return APIResponse.success(c, "OS releases retrieved", releases);
+		const { limit, offset, order } = c.req.valid("query");
+
+		const releases = await DB.instance().select({
+			id: DB.Schema.os_releases.id,
+			version: DB.Schema.os_releases.version,
+			created_at: DB.Schema.os_releases.created_at,
+
+			published_at: DB.Schema.scheduled_tasks.finished_at,
+			publishing_status: DB.Schema.scheduled_tasks.status,
+		})
+		.from(DB.Schema.os_releases)
+		.innerJoin(
+			DB.Schema.scheduled_tasks,
+			eq(DB.Schema.scheduled_tasks.id, DB.Schema.os_releases.taskID)
+		)
+		.orderBy(
+			order === "newest" ?
+				desc(DB.Schema.os_releases.created_at) :
+				DB.Schema.os_releases.created_at
+		)
+		.limit(limit)
+		.offset(offset);
+
+		return APIResponse.success(c, "OS releases retrieved", releases satisfies OSReleasesModel.GetAll.Response);
 	}
 );
 
@@ -45,7 +71,7 @@ router.post('/',
 
 	async (c) => {
 
-		const lastRelease = DB.instance().select().from(DB.Schema.os_releases).orderBy(desc(DB.Schema.os_releases.published_at)).limit(1).get();
+		const lastRelease = DB.instance().select().from(DB.Schema.os_releases).orderBy(desc(DB.Schema.os_releases.created_at)).limit(1).get();
 		if (!lastRelease) {
 			throw new Error("No previous OS release found to base delta on");
 		}
@@ -54,19 +80,22 @@ router.post('/',
 
 		const version = OSReleaseUtils.getVersionString(now, lastRelease.version);
 
-		const taskTag = `create-os-release:${version}`;
-
 		const taskID = await TaskScheduler.enqueueTask("os-release:create", {
 			pkgReleasesToIncludeByID: await RuntimeMetadata.getOSReleasePendingPackages(),
 			version,
 			timestamp: now.getTime()
-		}, { created_by_user_id: null, tag: taskTag });
+		}, { created_by_user_id: null });
 
-		return APIResponse.accepted(c, "OS release creation task enqueued", {
-			taskID,
-			version,
-			taskTag
-		} satisfies OSReleasesModel.CreateRelease.Response);
+		const result = {
+			...await DB.instance().insert(DB.Schema.os_releases).values({
+				version,
+				taskID,
+			}).returning().get(),
+			published_at: null,
+			publishing_status: "pending"
+		} as const;
+
+		return APIResponse.accepted(c, "OS release creation task enqueued", result satisfies OSReleasesModel.CreateRelease.Response);
 	}
 );
 
@@ -101,7 +130,8 @@ router.get('/:version',
 		tags: [DOCS_TAGS.ADMIN_API.OS_RELEASES],
 
 		responses: APIResponseSpec.describeBasic(
-			APIResponseSpec.success("OS release retrieved", OSReleasesModel.GetByVersion.Response)
+			APIResponseSpec.success("OS release retrieved", OSReleasesModel.GetByVersion.Response),
+			APIResponseSpec.notFound("OS release not found")
 		)
 	}),
 
@@ -109,6 +139,20 @@ router.get('/:version',
 		// @ts-ignore
 		const release = c.get("osRelease") as DB.Models.OSRelease;
 
-		return APIResponse.success(c, "OS release retrieved", release);
+		const task = await DB.instance().select().from(DB.Schema.scheduled_tasks).where(
+			eq(DB.Schema.scheduled_tasks.id, release.taskID)
+		).get();
+
+		if (!task) {
+			return APIResponse.serverError(c, "Associated publishing task not found for this OS release");
+		}
+
+		const result = {
+			...release,
+			published_at: task.finished_at,
+			publishing_status: task.status
+		};
+
+		return APIResponse.success(c, "OS release retrieved", result satisfies OSReleasesModel.GetByVersion.Response);
 	}
 );

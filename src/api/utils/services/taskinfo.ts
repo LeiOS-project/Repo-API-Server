@@ -8,27 +8,22 @@ import { ApiHelperModels } from "../shared-models/api-helper-models";
 
 export class TaskInfoService {
 
-    static async getAllTasks(c: Context, queryOpts: ApiHelperModels.ListAll.QueryWithSearch, asAdmin = false) {
+    static async getAllTasks(c: Context, queryOpts: ApiHelperModels.ListAll.Query, asAdmin = false) {
 
         if (!asAdmin) {
 
             // @ts-ignore
             const authContext = c.get("authContext") as AuthHandler.AuthContext;
 
-            const whereClause = and(
-                eq(DB.Schema.scheduled_tasks.created_by_user_id, authContext.user_id),
-                queryOpts.searchString
-                    ? like(DB.Schema.scheduled_tasks.tag, `%${queryOpts.searchString}%`)
-                    : undefined
-            );
-
             const tasks = await DB.instance().select()
             .from(DB.Schema.scheduled_tasks)
-            .where(whereClause)
+            .where(
+                eq(DB.Schema.scheduled_tasks.created_by_user_id, authContext.user_id),
+            )
             .orderBy(
                 queryOpts.order === "newest" ?
-                    desc(DB.Schema.stablePromotionRequests.created_at) :
-                    asc(DB.Schema.stablePromotionRequests.created_at)
+                    desc(DB.Schema.scheduled_tasks.created_at) :
+                    asc(DB.Schema.scheduled_tasks.created_at)
             )
             .limit(queryOpts.limit)
             .offset(queryOpts.offset);
@@ -37,13 +32,21 @@ export class TaskInfoService {
             return APIResponse.success(c, "Scheduled tasks retrieved", tasks);
         } else {
 
-            const tasks = await DB.instance().select().from(DB.Schema.scheduled_tasks);
+            const tasks = await DB.instance().select()
+            .from(DB.Schema.scheduled_tasks)
+            .orderBy(
+                queryOpts.order === "newest" ?
+                    desc(DB.Schema.scheduled_tasks.created_at) :
+                    asc(DB.Schema.scheduled_tasks.created_at)
+            )
+            .limit(queryOpts.limit)
+            .offset(queryOpts.offset);
 
             return APIResponse.success(c, "Scheduled tasks retrieved", tasks);
         }
     }
 
-    static async taskMiddleware(c: Context, next: () => Promise<void>, taskIDorTag: number | string, asAdmin = false) {
+    static async taskMiddleware(c: Context, next: () => Promise<void>, taskID: number, asAdmin = false) {
 
         let taskData: DB.Models.ScheduledTask | undefined;
 
@@ -51,28 +54,16 @@ export class TaskInfoService {
             // @ts-ignore
             const authContext = c.get("authContext") as AuthHandler.AuthContext;
 
-            if (typeof taskIDorTag === "number") {
-                taskData = DB.instance().select().from(DB.Schema.scheduled_tasks).where(and(
-                    eq(DB.Schema.scheduled_tasks.id, taskIDorTag),
-                    eq(DB.Schema.scheduled_tasks.created_by_user_id, authContext.user_id)
-                )).get();
-            } else {
-                taskData = DB.instance().select().from(DB.Schema.scheduled_tasks).where(and(
-                    eq(DB.Schema.scheduled_tasks.tag, taskIDorTag),
-                    eq(DB.Schema.scheduled_tasks.created_by_user_id, authContext.user_id)
-                )).get();
-            }
+            taskData = DB.instance().select().from(DB.Schema.scheduled_tasks).where(and(
+                eq(DB.Schema.scheduled_tasks.id, taskID),
+                eq(DB.Schema.scheduled_tasks.created_by_user_id, authContext.user_id)
+            )).get();
         } else {
             
-            if (typeof taskIDorTag === "number") {
-                taskData = DB.instance().select().from(DB.Schema.scheduled_tasks).where(
-                    eq(DB.Schema.scheduled_tasks.id, taskIDorTag)
-                ).get();
-            } else {
-                taskData = DB.instance().select().from(DB.Schema.scheduled_tasks).where(
-                    eq(DB.Schema.scheduled_tasks.tag, taskIDorTag)
-                ).get();
-            }
+
+            taskData = DB.instance().select().from(DB.Schema.scheduled_tasks).where(
+                eq(DB.Schema.scheduled_tasks.id, taskID)
+            ).get();
         }
 
         if (!taskData) {

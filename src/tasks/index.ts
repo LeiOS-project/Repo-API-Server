@@ -155,19 +155,19 @@ class PersistentLogger implements TaskHandler.PersistentTaskLoggerLike {
 	}
 
 	public debug(...msg: string[]) {
-		this.writeStream.write("[DEBUG] " + msg.join(" ") + "\n");
+		this.writeStream.write(`[${new Date(Date.now()).toISOString()}] [DEBUG] ${msg.join(" ")}\n`);
 	}
 
 	public info(...msg: string[]) {
-		this.writeStream.write("[INFO] " + msg.join(" ") + "\n");
+		this.writeStream.write(`[${new Date(Date.now()).toISOString()}] [INFO] ${msg.join(" ")}\n`);
 	}
 
 	public warn(...msg: string[]) {
-		this.writeStream.write("[WARN] " + msg.join(" ") + "\n");
+		this.writeStream.write(`[${new Date(Date.now()).toISOString()}] [WARN] ${msg.join(" ")}\n`);
 	}
 
 	public error(...msg: string[]) {
-		this.writeStream.write("[ERROR] " + msg.join(" ") + "\n");	
+		this.writeStream.write(`[${new Date(Date.now()).toISOString()}] [ERROR] ${msg.join(" ")}\n`);	
 	}
 
 	async close() {

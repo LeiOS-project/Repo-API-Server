@@ -5,6 +5,7 @@ import { eq, and, or, like, desc, asc } from "drizzle-orm";
 import { AuthHandler } from "../authHandler";
 import { ConfigHandler } from "../../../utils/config";
 import { ApiHelperModels } from "../shared-models/api-helper-models";
+import { TaskUtils } from "../../../tasks/utils";
 
 export class TaskInfoService {
 
@@ -90,12 +91,12 @@ export class TaskInfoService {
             return APIResponse.badRequest(c, "Logs are not stored for this task");
         }
 
-        const logs = Bun.file((ConfigHandler.getConfig()?.LRA_LOG_DIR || "./data/logs") + `/tasks/task-${taskData.id}.log`);
-        if (!await logs.exists()) {
+        const logs = await TaskUtils.getLogsForTask(taskData.id);
+        if (logs === null) {
             return APIResponse.notFound(c, "Log file not found for this task");
         }
 
-        return APIResponse.success(c, "Task logs retrieved successfully", { logs: await logs.text() });
+        return APIResponse.success(c, "Task logs retrieved successfully", { logs: logs });
     }
 
 }

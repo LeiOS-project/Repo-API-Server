@@ -12,6 +12,8 @@ import { RuntimeMetadata } from "../../../utils/metadata";
 import { OSReleaseUtils } from "../../../utils/os-release-utils";
 import { ApiHelperModels } from "../../../utils/shared-models/api-helper-models";
 import { p } from "@hey-api/openapi-ts/dist/config-DCoXG8pO";
+import { TaskHandler } from "@cleverjs/utils";
+import { TaskUtils } from "../../../../tasks/utils";
 
 export const router = new Hono().basePath('/os-releases');
 
@@ -154,5 +156,32 @@ router.get('/:version',
 		};
 
 		return APIResponse.success(c, "OS release retrieved", result satisfies OSReleasesModel.GetByVersion.Response);
+	}
+);
+
+router.get('/:version/publishing-logs',
+
+	APIRouteSpec.authenticated({
+		summary: "Get OS release publishing logs",
+		description: "Retrieve publishing logs of a specific OS release by version.",
+		tags: [DOCS_TAGS.ADMIN_API.OS_RELEASES],
+
+		responses: APIResponseSpec.describeBasic(
+			APIResponseSpec.success("Publishing logs retrieved", OSReleasesModel.GetPublishingLogs.Response),
+			APIResponseSpec.notFound("OS release not found / Log file not found for this OS release publishing task")
+		)
+	}),
+
+	async (c) => {
+		// @ts-ignore
+		const release = c.get("osRelease") as DB.Models.OSRelease;
+
+		const logs = await TaskUtils.getLogsForTask(release.taskID);
+
+		if (logs === null) {
+			return APIResponse.notFound(c, "Log file not found for this OS release publishing task");
+		}
+
+		return APIResponse.success(c, "Publishing logs retrieved", { logs } satisfies OSReleasesModel.GetPublishingLogs.Response);
 	}
 );

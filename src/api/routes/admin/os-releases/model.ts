@@ -38,3 +38,13 @@ export namespace OSReleasesModel.CreateRelease {
 
     export type Response = z.infer<typeof Response>;
 }
+
+export namespace OSReleasesModel.GetPublishingLogs {
+
+    export const Response = z.object({
+        logs: z.string()
+    });
+
+    export type Response = z.infer<typeof Response>;
+
+}

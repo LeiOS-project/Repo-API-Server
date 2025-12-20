@@ -2,6 +2,47 @@ import { createInsertSchema, createSelectSchema, createUpdateSchema } from "driz
 import { DB } from "../../../db";
 import z from "zod";
 
+export namespace PackageModel {
+
+    export const ForbiddenPackageNames = [
+        "admin",
+        "user",
+        "users",
+        "package",
+        "packages",
+        "release",
+        "releases",
+        "os",
+        "api",
+        "dashboard",
+        "home",
+        "settings",
+        "login",
+        "logout",
+        "register",
+        "auth",
+        "static",
+        "public",
+        "new",
+        "edit",
+        "delete",
+        "update",
+        "create",
+        "list",
+        "all",
+        "latest",
+        "stable",
+        "testing",
+        "beta",
+        "alpha",
+        "dev",
+        "development",
+        "prod",
+        "production"
+    ] as const;
+    
+}
+
 export namespace PackageModel.GetPackageByName {
     
     export const Response = createSelectSchema(DB.Schema.packages);
@@ -19,10 +60,18 @@ export namespace PackageModel.GetAll {
 export namespace PackageModel.CreatePackageAsAdmin {
 
     export const Body = createInsertSchema(DB.Schema.packages, {
-        name: z.string().regex(
-            /^[a-z0-9][a-z0-9+.-]{1,62}$/,
-            "Package names must be 2-63 chars, lowercase, and may contain + - ."
-        )
+        name: z.string()
+            .regex(
+                /^[a-z0-9][a-z0-9+.-]{1,62}$/,
+                "Package names must be 2-63 chars, lowercase, and may contain + - ."
+            )
+            .regex(
+                /^[a-z0-9].*[a-z0-9]$/,
+                "Package names must start and end with a letter or number."
+            )
+            .refine((name) => !PackageModel.ForbiddenPackageNames.includes(name as any), {
+                message: "This package name is reserved and cannot be used."
+            })
     }).omit({
         id: true,
         created_at: true,

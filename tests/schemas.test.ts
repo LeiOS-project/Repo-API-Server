@@ -1,23 +1,24 @@
 import { describe, expect, test } from "bun:test";
 import { PackageModel } from "../src/api/utils/shared-models/package";
+import { UserDataPolicys } from "../src/api/utils/shared-models/accountData";
 
 describe("Packge Schema Testing", () => {
 
     test("Forbidden Package Names should be correct", async () => {
         
         expect(PackageModel.CreatePackage.Body.safeParse({
-            name: "admin",
+            name: "admin", // Forbidden name
             description: "A forbidden package",
             homepage_url: "https://example.com",
             requires_patching: false
-        } satisfies PackageModel.CreatePackage.Body)).toEqual({success: false, error: expect.anything()});
+        } satisfies PackageModel.CreatePackage.Body)).toEqual({ success: false, error: expect.anything() });
 
         expect(PackageModel.CreatePackage.Body.safeParse({
             name: "valid-package-name",
             description: "A valid package",
             homepage_url: "https://example.com",
             requires_patching: false
-        } satisfies PackageModel.CreatePackage.Body)).toEqual({success: true, data: expect.anything()});
+        } satisfies PackageModel.CreatePackage.Body)).toEqual({ success: true, data: expect.anything() });
         
         const invalidNames = [
             "AInvalidName", // Uppercase letters
@@ -29,13 +30,13 @@ describe("Packge Schema Testing", () => {
         ];
 
         for (const name of invalidNames) {
-            console.log(`Testing invalid package name: ${name}`);
+            // console.log(`Testing invalid package name: ${name}`);
             expect(PackageModel.CreatePackage.Body.safeParse({
                 name: name,
                 description: "An invalid package",
                 homepage_url: "https://example.com",
                 requires_patching: false
-            } satisfies PackageModel.CreatePackage.Body)).toEqual({success: false, error: expect.anything()});
+            } satisfies PackageModel.CreatePackage.Body)).toEqual({ success: false, error: expect.anything() });
         }
 
         const validNames = [
@@ -52,9 +53,44 @@ describe("Packge Schema Testing", () => {
                 description: "A valid package",
                 homepage_url: "https://example.com",
                 requires_patching: false
-            } satisfies PackageModel.CreatePackage.Body)).toEqual({success: true, data: expect.anything()});
+            } satisfies PackageModel.CreatePackage.Body)).toEqual({ success: true, data: expect.anything() });
         }
 
     });
 });
 
+
+describe("User Account Policy Schema Testing", () => {
+
+    test("Username validation", async () => {
+        
+        const invalidUsernames = [
+            "aa", // Too short
+            "thisusernameiswaytoolongtobevalidbecauseitexceedsthemaximumlength", // Too long
+            "invalid_username!", // Invalid character !
+            "-invalidstart", // Starts with invalid character
+            "invalidend-", // Ends with invalid character
+            "a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t1x", // Too long (41 characters)
+        ];
+
+        for (const username of invalidUsernames) {
+            expect(UserDataPolicys.Username.safeParse(username)).toEqual({ success: false, error: expect.anything() });
+        }
+
+        const validUsernames = [
+            "valid-username",
+            "valid.username",
+            "valid_username",
+            "validusername123_",
+            "12345",
+            "a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t1",
+        ];
+
+        for (const username of validUsernames) {
+            // console.log(`Testing valid username: ${username}`);
+            expect(UserDataPolicys.Username.safeParse(username)).toEqual({ success: true, data: expect.anything() });
+        }
+
+    });
+    
+});

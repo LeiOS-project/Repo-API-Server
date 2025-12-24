@@ -4,8 +4,12 @@ export namespace UserDataPolicys {
 
     export const Username = z.string()
         .min(5, 'Must be at least 5 characters')
-        .max(30, 'Must be at most 30 characters')
-        .regex(/^[a-zA-Z0-9_]+$/, 'Only alphanumeric characters and underscores are allowed');
+        .max(40, 'Must be at most 40 characters')
+        // .regex(/^[a-zA-Z0-9_]+$/, 'Only alphanumeric characters and underscores are allowed');
+        .regex(
+            /^(?!.*[.-]{2})(?!.*--)(?!.*\.\.)[a-z0-9](?:[a-z0-9._-]{3,38}[a-z0-9_])?$/,
+            "Username can only contain lowercase letters, numbers, dots, underscores, and hyphens; no consecutive dots or hyphens; must start with a letter/number; can end with a letter, number, or underscore"
+        )
 
     export type Username = z.infer<typeof Username>;
 
